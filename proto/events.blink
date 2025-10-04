@@ -1,0 +1,4 @@
+option ClientOutput = "../src/client/modules/Events.luau"
+option ServerOutput = "../src/server/modules/Events.luau"
+
+import "./building" as Building

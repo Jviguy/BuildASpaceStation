@@ -1,0 +1,6 @@
+event clientPlacedBlock {
+    from: Client,
+    type: Reliable,
+    call: SingleAsync,
+    data: string,
+}

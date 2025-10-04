@@ -1,0 +1,10 @@
+# Project place file
+/BuildASpaceStation.rbxlx
+
+# Roblox Studio lock files
+/*.rbxlx.lock
+/*.rbxl.lock
+
+# Hide these folders, every dev should have wally and install this on their own in case of local conflicts and etc. (wally install)
+Packages
+ServerPackages
