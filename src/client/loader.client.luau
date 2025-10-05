@@ -96,7 +96,7 @@ end)
 local welcomeUI = WelcomeUI.new(uiManager, missionDataManager)
 local missionSetupUI = MissionSetupUI.new(uiManager, missionDataManager)
 local buildingUI = BuildingUI.new(uiManager, missionDataManager, buildingSystem)
-local playUI = PlayUI.new(uiManager, missionDataManager)
+local playUI = PlayUI.new(uiManager, missionDataManager, cameraController)
 
 -- Store direct reference to BuildingUI in UIManager for easy access
 uiManager.BuildingUI = buildingUI

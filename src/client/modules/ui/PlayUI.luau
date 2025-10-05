@@ -3,15 +3,27 @@ PlayUI.__index = PlayUI
 
 -- Services
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 local LocalPlayer = Players.LocalPlayer
 
-function PlayUI.new(uiManager, missionDataManager)
+function PlayUI.new(uiManager, missionDataManager, cameraController)
     local self = setmetatable({}, PlayUI)
 
     self.UIManager = uiManager
     self.MissionDataManager = missionDataManager
+    self.CameraController = cameraController
     self.ScreenGui = nil
-
+    
+    -- Money system
+    self.Money = 0
+    self.MoneyLabel = nil
+    self.MoneyConnection = nil
+    
+    -- Visual effects
+    self.EffectsContainer = nil
+    
     -- Get mission data from manager
     self.MissionData = missionDataManager:GetMissionData()
 
@@ -23,328 +35,322 @@ function PlayUI:Create()
     self.ScreenGui = Instance.new("ScreenGui")
     self.ScreenGui.Name = "PlayUI"
     self.ScreenGui.ResetOnSpawn = false
-    self.ScreenGui.IgnoreGuiInset = true -- Bypass Roblox topbar
+    self.ScreenGui.IgnoreGuiInset = true
+    self.ScreenGui.DisplayOrder = 10
 
-    -- Main container
-    local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(1, 0, 1, 0)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(15, 25, 35)
-    mainFrame.BorderSizePixel = 0
-    mainFrame.Parent = self.ScreenGui
-
-    -- Top bar
-    self:CreateTopBar(mainFrame)
-
-    -- Left panel (mission status)
-    self:CreateMissionStatus(mainFrame)
-
-    -- Right panel (habitat validation)
-    self:CreateHabitatValidation(mainFrame)
-
-    -- Bottom bar (controls)
-    self:CreateBottomBar(mainFrame)
+    -- Create space background
+    self:CreateSpaceBackground()
+    
+    -- Create money UI
+    self:CreateMoneyUI()
+    
+    -- Create effects container
+    self:CreateEffectsContainer()
+    
+    -- Create mission info UI
+    self:CreateMissionInfoUI()
+    
+    -- Create back button
+    self:CreateBackButton()
 
     return self.ScreenGui
 end
 
-function PlayUI:CreateTopBar(parent)
-    local topBar = Instance.new("Frame")
-    topBar.Size = UDim2.new(1, 0, 0.08, 0)
-    topBar.Position = UDim2.new(0, 0, 0, 0)
-    topBar.BackgroundColor3 = Color3.fromRGB(35, 45, 55)
-    topBar.BorderSizePixel = 0
-    topBar.Parent = parent
+function PlayUI:CreateSpaceBackground()
+    -- Create a space-like background
+    local background = Instance.new("Frame")
+    background.Size = UDim2.fromScale(1, 1)
+    background.Position = UDim2.fromScale(0, 0)
+    background.BackgroundColor3 = Color3.fromRGB(5, 10, 25) -- Dark space color
+    background.BorderSizePixel = 0
+    background.Parent = self.ScreenGui
+    
+    -- Add some stars
+    for i = 1, 50 do
+        local star = Instance.new("Frame")
+        star.Size = UDim2.fromOffset(math.random(1, 3), math.random(1, 3))
+        star.Position = UDim2.fromScale(math.random(), math.random())
+        star.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        star.BorderSizePixel = 0
+        star.Parent = background
+        
+        -- Make some stars twinkle
+        if math.random() > 0.7 then
+            local tween = TweenService:Create(star, 
+                TweenInfo.new(math.random(1, 3), Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+                {BackgroundTransparency = 0.8}
+            )
+            tween:Play()
+        end
+    end
+end
 
-    -- Title
+function PlayUI:CreateMoneyUI()
+    -- Money display frame
+    local moneyFrame = Instance.new("Frame")
+    moneyFrame.Size = UDim2.fromOffset(300, 80)
+    moneyFrame.Position = UDim2.new(0, 20, 0, 20)
+    moneyFrame.BackgroundColor3 = Color3.fromRGB(20, 30, 50)
+    moneyFrame.BorderSizePixel = 0
+    moneyFrame.Parent = self.ScreenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = moneyFrame
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(100, 200, 100)
+    stroke.Thickness = 2
+    stroke.Parent = moneyFrame
+    
+    -- Money icon
+    local moneyIcon = Instance.new("TextLabel")
+    moneyIcon.Size = UDim2.fromOffset(40, 40)
+    moneyIcon.Position = UDim2.fromOffset(10, 20)
+    moneyIcon.BackgroundTransparency = 1
+    moneyIcon.Text = "💰"
+    moneyIcon.TextSize = 32
+    moneyIcon.Font = Enum.Font.GothamBold
+    moneyIcon.Parent = moneyFrame
+    
+    -- Money label
+    self.MoneyLabel = Instance.new("TextLabel")
+    self.MoneyLabel.Size = UDim2.new(1, -60, 1, 0)
+    self.MoneyLabel.Position = UDim2.fromOffset(60, 0)
+    self.MoneyLabel.BackgroundTransparency = 1
+    self.MoneyLabel.Text = "$0"
+    self.MoneyLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    self.MoneyLabel.TextSize = 24
+    self.MoneyLabel.Font = Enum.Font.GothamBold
+    self.MoneyLabel.TextXAlignment = Enum.TextXAlignment.Left
+    self.MoneyLabel.Parent = moneyFrame
+end
+
+function PlayUI:CreateEffectsContainer()
+    -- Container for money gain effects
+    self.EffectsContainer = Instance.new("Frame")
+    self.EffectsContainer.Size = UDim2.fromScale(1, 1)
+    self.EffectsContainer.Position = UDim2.fromScale(0, 0)
+    self.EffectsContainer.BackgroundTransparency = 1
+    self.EffectsContainer.Parent = self.ScreenGui
+end
+
+function PlayUI:CreateMissionInfoUI()
+    -- Mission info frame
+    local infoFrame = Instance.new("Frame")
+    infoFrame.Size = UDim2.fromOffset(250, 120)
+    infoFrame.Position = UDim2.new(1, -270, 0, 20)
+    infoFrame.BackgroundColor3 = Color3.fromRGB(20, 30, 50)
+    infoFrame.BorderSizePixel = 0
+    infoFrame.Parent = self.ScreenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 10)
+    corner.Parent = infoFrame
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(100, 150, 255)
+    stroke.Thickness = 2
+    stroke.Parent = infoFrame
+    
+    -- Mission title
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(0.3, 0, 1, 0)
-    titleLabel.Position = UDim2.new(0.02, 0, 0, 0)
+    titleLabel.Size = UDim2.new(1, -20, 0, 30)
+    titleLabel.Position = UDim2.fromOffset(10, 10)
     titleLabel.BackgroundTransparency = 1
-    titleLabel.Text = "Play Mode - Testing Habitat"
+    titleLabel.Text = "🚀 MISSION ACTIVE"
     titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    titleLabel.TextScaled = true
-    titleLabel.Font = Enum.Font.SourceSansBold
-    titleLabel.Parent = topBar
-
-    -- Mission info
-    local missionLabel = Instance.new("TextLabel")
-    missionLabel.Size = UDim2.new(0.4, 0, 1, 0)
-    missionLabel.Position = UDim2.new(0.35, 0, 0, 0)
-    missionLabel.BackgroundTransparency = 1
-    missionLabel.Text = "Crew: 4 | Duration: 30 days"
-    missionLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    missionLabel.TextScaled = true
-    missionLabel.Font = Enum.Font.SourceSans
-    missionLabel.Parent = topBar
+    titleLabel.TextSize = 16
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = infoFrame
+    
+    -- Mission details
+    local detailsLabel = Instance.new("TextLabel")
+    detailsLabel.Size = UDim2.new(1, -20, 0, 70)
+    detailsLabel.Position = UDim2.fromOffset(10, 40)
+    detailsLabel.BackgroundTransparency = 1
+    detailsLabel.Text = string.format("Type: %s\nCrew: %d\nDuration: %d days", 
+        self.MissionData.MissionType, self.MissionData.CrewSize, self.MissionData.Duration)
+    detailsLabel.TextColor3 = Color3.fromRGB(200, 220, 255)
+    detailsLabel.TextSize = 14
+    detailsLabel.Font = Enum.Font.Gotham
+    detailsLabel.TextXAlignment = Enum.TextXAlignment.Left
+    detailsLabel.TextYAlignment = Enum.TextYAlignment.Top
+    detailsLabel.Parent = infoFrame
 end
 
-function PlayUI:CreateMissionStatus(parent)
-    local statusFrame = Instance.new("Frame")
-    statusFrame.Size = UDim2.new(0.4, 0, 0.92, 0)
-    statusFrame.Position = UDim2.new(0.05, 0, 0.08, 0)
-    statusFrame.BackgroundColor3 = Color3.fromRGB(25, 35, 45)
-    statusFrame.BorderSizePixel = 0
-    statusFrame.Parent = parent
-
-    -- Status title
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, 0, 0.08, 0)
-    titleLabel.BackgroundColor3 = Color3.fromRGB(45, 55, 65)
-    titleLabel.BorderSizePixel = 0
-    titleLabel.Text = "Mission Status"
-    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    titleLabel.TextScaled = true
-    titleLabel.Font = Enum.Font.SourceSansBold
-    titleLabel.Parent = statusFrame
-
-    -- Status items (would be calculated based on placed modules)
-    self.StatusLabels = {}
-
-    local statusItems = {
-        {name = "Sleep Quarters", current = 0, required = 24, unit = "m²"},
-        {name = "Exercise Area", current = 0, required = 12, unit = "m²"},
-        {name = "Galley/Food Prep", current = 0, required = 8, unit = "m²"},
-        {name = "Laboratory", current = 0, required = 16, unit = "m²"}
-    }
-
-    local startY = 0.12
-    for i, item in ipairs(statusItems) do
-        local itemFrame = Instance.new("Frame")
-        itemFrame.Size = UDim2.new(0.9, 0, 0.15, 0)
-        itemFrame.Position = UDim2.new(0.05, 0, startY, 0)
-        itemFrame.BackgroundTransparency = 1
-        itemFrame.Parent = statusFrame
-
-        -- Item name
-        local nameLabel = Instance.new("TextLabel")
-        nameLabel.Size = UDim2.new(0.6, 0, 0.6, 0)
-        nameLabel.Position = UDim2.new(0, 0, 0, 0)
-        nameLabel.BackgroundTransparency = 1
-        nameLabel.Text = item.name
-        nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        nameLabel.TextScaled = true
-        nameLabel.Font = Enum.Font.SourceSans
-        nameLabel.Parent = itemFrame
-
-        -- Progress bar background
-        local progressBg = Instance.new("Frame")
-        progressBg.Size = UDim2.new(0.35, 0, 0.3, 0)
-        progressBg.Position = UDim2.new(0.65, 0, 0.35, 0)
-        progressBg.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-        progressBg.BorderSizePixel = 0
-        progressBg.Parent = itemFrame
-
-        -- Progress bar fill
-        local progressFill = Instance.new("Frame")
-        progressFill.Size = UDim2.new(0, 0, 1, 0) -- Will be updated
-        progressFill.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
-        progressFill.BorderSizePixel = 0
-        progressFill.Parent = progressBg
-
-        -- Progress text
-        local progressText = Instance.new("TextLabel")
-        progressText.Size = UDim2.new(1, 0, 1, 0)
-        progressText.BackgroundTransparency = 1
-        progressText.Text = "0 / " .. item.required .. " " .. item.unit
-        progressText.TextColor3 = Color3.fromRGB(255, 255, 255)
-        progressText.TextScaled = true
-        progressText.Font = Enum.Font.SourceSans
-        progressText.Parent = progressBg
-
-        self.StatusLabels[i] = {
-            progressFill = progressFill,
-            progressText = progressText,
-            required = item.required
-        }
-
-        startY = startY + 0.18
-    end
-end
-
-function PlayUI:CreateHabitatValidation(parent)
-    local validationFrame = Instance.new("Frame")
-    validationFrame.Size = UDim2.new(0.4, 0, 0.92, 0)
-    validationFrame.Position = UDim2.new(0.55, 0, 0.08, 0)
-    validationFrame.BackgroundColor3 = Color3.fromRGB(25, 35, 45)
-    validationFrame.BorderSizePixel = 0
-    validationFrame.Parent = parent
-
-    -- Validation title
-    local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(1, 0, 0.08, 0)
-    titleLabel.BackgroundColor3 = Color3.fromRGB(45, 55, 65)
-    titleLabel.BorderSizePixel = 0
-    titleLabel.Text = "Habitat Validation"
-    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    titleLabel.TextScaled = true
-    titleLabel.Font = Enum.Font.SourceSansBold
-    titleLabel.Parent = validationFrame
-
-    -- Validation status
-    self.ValidationStatusLabel = Instance.new("TextLabel")
-    self.ValidationStatusLabel.Size = UDim2.new(0.9, 0, 0.2, 0)
-    self.ValidationStatusLabel.Position = UDim2.new(0.05, 0, 0.12, 0)
-    self.ValidationStatusLabel.BackgroundTransparency = 1
-    self.ValidationStatusLabel.Text = "Place modules to meet requirements"
-    self.ValidationStatusLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    self.ValidationStatusLabel.TextScaled = true
-    self.ValidationStatusLabel.TextWrapped = true
-    self.ValidationStatusLabel.Font = Enum.Font.SourceSans
-    self.ValidationStatusLabel.Parent = validationFrame
-
-    -- Validation checklist
-    self:CreateValidationChecklist(validationFrame)
-end
-
-function PlayUI:CreateValidationChecklist(parent)
-    local checklistFrame = Instance.new("Frame")
-    checklistFrame.Size = UDim2.new(0.9, 0, 0.6, 0)
-    checklistFrame.Position = UDim2.new(0.05, 0, 0.35, 0)
-    checklistFrame.BackgroundTransparency = 1
-    checklistFrame.Parent = parent
-
-    local requirements = {
-        "All crew members have sleep quarters",
-        "Exercise area meets requirements",
-        "Food preparation area adequate",
-        "Laboratory space sufficient",
-        "Emergency egress routes clear"
-    }
-
-    local startY = 0
-    for i, requirement in ipairs(requirements) do
-        local itemFrame = Instance.new("Frame")
-        itemFrame.Size = UDim2.new(1, 0, 0.15, 0)
-        itemFrame.Position = UDim2.new(0, 0, startY, 0)
-        itemFrame.BackgroundTransparency = 1
-        itemFrame.Parent = checklistFrame
-
-        -- Status indicator (circle)
-        local statusCircle = Instance.new("Frame")
-        statusCircle.Size = UDim2.new(0.05, 0, 0.6, 0)
-        statusCircle.Position = UDim2.new(0, 0, 0.2, 0)
-        statusCircle.BackgroundColor3 = Color3.fromRGB(200, 50, 50) -- Red for incomplete
-        statusCircle.BorderSizePixel = 0
-        statusCircle.Parent = itemFrame
-
-        -- Requirement text
-        local textLabel = Instance.new("TextLabel")
-        textLabel.Size = UDim2.new(0.85, 0, 1, 0)
-        textLabel.Position = UDim2.new(0.1, 0, 0, 0)
-        textLabel.BackgroundTransparency = 1
-        textLabel.Text = requirement
-        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        textLabel.TextScaled = true
-        textLabel.TextWrapped = true
-        textLabel.Font = Enum.Font.SourceSans
-        textLabel.Parent = itemFrame
-
-        startY = startY + 0.18
-    end
-end
-
-function PlayUI:CreateBottomBar(parent)
-    local bottomBar = Instance.new("Frame")
-    bottomBar.Size = UDim2.new(1, 0, 0.08, 0)
-    bottomBar.Position = UDim2.new(0, 0, 0.92, 0)
-    bottomBar.BackgroundColor3 = Color3.fromRGB(35, 45, 55)
-    bottomBar.BorderSizePixel = 0
-    bottomBar.Parent = parent
-
-    -- Back to building button
+function PlayUI:CreateBackButton()
+    -- Back button
     local backButton = Instance.new("TextButton")
-    backButton.Size = UDim2.new(0.2, 0, 0.8, 0)
-    backButton.Position = UDim2.new(0.1, 0, 0.1, 0)
-    backButton.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
+    backButton.Size = UDim2.fromOffset(120, 50)
+    backButton.Position = UDim2.new(0.5, -60, 1, -70)
+    backButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
     backButton.BorderSizePixel = 0
-    backButton.Text = "Back to Building"
+    backButton.Text = "← Back to Building"
     backButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    backButton.TextScaled = true
-    backButton.Font = Enum.Font.SourceSansBold
-    backButton.Parent = bottomBar
-
-    -- Complete mission button
-    local completeButton = Instance.new("TextButton")
-    completeButton.Size = UDim2.new(0.2, 0, 0.8, 0)
-    completeButton.Position = UDim2.new(0.7, 0, 0.1, 0)
-    completeButton.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
-    completeButton.BorderSizePixel = 0
-    completeButton.Text = "Complete Mission"
-    completeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    completeButton.TextScaled = true
-    completeButton.Font = Enum.Font.SourceSansBold
-    completeButton.Parent = bottomBar
-
-    -- Button hover effects
-    local function onBackHover()
-        backButton.BackgroundColor3 = Color3.fromRGB(170, 170, 170)
-    end
-
-    local function onBackLeave()
-        backButton.BackgroundColor3 = Color3.fromRGB(150, 150, 150)
-    end
-
-    local function onCompleteHover()
-        completeButton.BackgroundColor3 = Color3.fromRGB(120, 220, 120)
-    end
-
-    local function onCompleteLeave()
-        completeButton.BackgroundColor3 = Color3.fromRGB(100, 200, 100)
-    end
-
-    backButton.MouseEnter:Connect(onBackHover)
-    backButton.MouseLeave:Connect(onBackLeave)
-    completeButton.MouseEnter:Connect(onCompleteHover)
-    completeButton.MouseLeave:Connect(onCompleteLeave)
-
-    -- Button click handlers
+    backButton.TextSize = 14
+    backButton.Font = Enum.Font.GothamBold
+    backButton.Parent = self.ScreenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = backButton
+    
+    -- Hover effects
+    backButton.MouseEnter:Connect(function()
+        backButton.BackgroundColor3 = Color3.fromRGB(220, 120, 120)
+    end)
+    
+    backButton.MouseLeave:Connect(function()
+        backButton.BackgroundColor3 = Color3.fromRGB(200, 100, 100)
+    end)
+    
+    -- Click handler
     backButton.MouseButton1Click:Connect(function()
+        self:StopMission()
         self.UIManager.GameState:EnterBuildingMode()
     end)
+end
 
-    completeButton.MouseButton1Click:Connect(function()
-        self:OnMissionComplete()
-        self.UIManager.GameState:EnterGameOver()
+function PlayUI:StartMission()
+    print("PlayUI: Starting mission simulation")
+    
+    -- Set camera to top-down view of the space station
+    if self.CameraController then
+        self.CameraController:SetTopDownView()
+    end
+    
+    -- Start money generation
+    self:StartMoneyGeneration()
+end
+
+function PlayUI:StartMoneyGeneration()
+    -- Generate money randomly every 1-3 seconds
+    local function generateMoney()
+        if not self.MoneyConnection then return end
+        
+        local amount = math.random(50, 200)
+        self:AddMoney(amount)
+        
+        -- Schedule next money generation
+        task.wait(math.random(1, 3))
+        generateMoney()
+    end
+    
+    -- Start the money generation loop
+    self.MoneyConnection = task.spawn(generateMoney)
+end
+
+function PlayUI:AddMoney(amount)
+    self.Money = self.Money + amount
+    self.MoneyLabel.Text = "$" .. tostring(self.Money)
+    
+    -- Create visual effect
+    self:CreateMoneyEffect(amount)
+    
+    -- Play sound effect
+    self:PlayCashSound()
+    
+    -- Animate money counter
+    self:AnimateMoneyCounter()
+end
+
+function PlayUI:CreateMoneyEffect(amount)
+    -- Create floating money text
+    local effectLabel = Instance.new("TextLabel")
+    effectLabel.Size = UDim2.fromOffset(100, 40)
+    effectLabel.Position = UDim2.new(math.random(20, 80) / 100, 0, math.random(20, 80) / 100, 0)
+    effectLabel.BackgroundTransparency = 1
+    effectLabel.Text = "+$" .. tostring(amount)
+    effectLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+    effectLabel.TextSize = 20
+    effectLabel.Font = Enum.Font.GothamBold
+    effectLabel.TextStrokeTransparency = 0
+    effectLabel.TextStrokeColor3 = Color3.fromRGB(0, 100, 0)
+    effectLabel.Rotation = math.random(-15, 15)
+    effectLabel.Parent = self.EffectsContainer
+    
+    -- Animate the effect
+    local tweenInfo = TweenInfo.new(2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(effectLabel, tweenInfo, {
+        Position = UDim2.new(effectLabel.Position.X.Scale, 0, effectLabel.Position.Y.Scale - 0.2, 0),
+        TextTransparency = 1,
+        TextStrokeTransparency = 1
+    })
+    
+    tween:Play()
+    tween.Completed:Connect(function()
+        effectLabel:Destroy()
     end)
 end
 
-function PlayUI:UpdateValidationStatus()
-    -- This would be called to update the UI based on current habitat state
-    -- For now, just update the status text
-    self.ValidationStatusLabel.Text = "Validating habitat configuration..."
+function PlayUI:PlayCashSound()
+    -- Create a simple cash register sound effect
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxasset://sounds/electronicpingshort.wav" -- Built-in Roblox sound
+    sound.Volume = 0.3
+    sound.Pitch = math.random(80, 120) / 100 -- Vary pitch slightly
+    sound.Parent = self.ScreenGui
+    
+    sound:Play()
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
 end
 
-function PlayUI:OnMissionComplete()
-    -- Update mission state to game over
-    self.MissionDataManager:UpdateMissionData({
-        CurrentState = "GameOver"
-    })
-    print("PlayUI: Mission completed, state updated to GameOver")
+function PlayUI:AnimateMoneyCounter()
+    -- Scale animation for money counter
+    local originalSize = self.MoneyLabel.Size
+    local scaleUp = TweenService:Create(self.MoneyLabel, 
+        TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Size = UDim2.new(originalSize.X.Scale * 1.1, originalSize.X.Offset, originalSize.Y.Scale * 1.1, originalSize.Y.Offset)}
+    )
+    
+    local scaleDown = TweenService:Create(self.MoneyLabel,
+        TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+        {Size = originalSize}
+    )
+    
+    scaleUp:Play()
+    scaleUp.Completed:Connect(function()
+        scaleDown:Play()
+    end)
+end
+
+function PlayUI:StopMission()
+    print("PlayUI: Stopping mission simulation")
+    
+    -- Stop money generation
+    if self.MoneyConnection then
+        task.cancel(self.MoneyConnection)
+        self.MoneyConnection = nil
+    end
+    
+    -- Reset camera
+    if self.CameraController then
+        self.CameraController:ResetCamera()
+    end
 end
 
 function PlayUI:Show(gui)
     if LocalPlayer.PlayerGui then
         gui.Parent = LocalPlayer.PlayerGui
-        print("PlayUI: Play interface displayed")
+        self:StartMission()
+        print("PlayUI: Play mode started with top-down view")
     else
-        print("PlayUI: PlayerGui not available yet, will retry...")
-        delay(0.1, function()
-            if LocalPlayer.PlayerGui then
-                gui.Parent = LocalPlayer.PlayerGui
-                print("PlayUI: Play interface displayed (delayed)")
-            else
-                print("PlayUI: PlayerGui still not available")
-            end
-        end)
+        warn("PlayUI: PlayerGui not available")
     end
 end
 
 function PlayUI:Hide(gui)
+    self:StopMission()
     gui.Parent = nil
-    print("PlayUI: Play interface hidden")
+    print("PlayUI: Play mode stopped")
 end
 
 function PlayUI:Destroy()
+    self:StopMission()
     if self.ScreenGui then
         self.ScreenGui:Destroy()
         self.ScreenGui = nil

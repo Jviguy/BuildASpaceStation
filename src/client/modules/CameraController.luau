@@ -367,4 +367,56 @@ function CameraController:DisableTopDown()
 	self:SwitchToMode(CameraController.Modes.FREE)
 end
 
+function CameraController:SetTopDownView()
+    print("CameraController: Setting top-down view for play mode")
+    
+    -- Set camera to top-down view of the space station
+    local camera = workspace.CurrentCamera
+    camera.CameraType = Enum.CameraType.Scriptable
+    
+    -- Position camera high above the space station looking down
+    local stationCenter = Vector3.new(0, 30, 0) -- Adjust based on your station position
+    local cameraHeight = 200
+    
+    camera.CFrame = CFrame.new(
+        stationCenter + Vector3.new(0, cameraHeight, 0),
+        stationCenter
+    )
+    
+    -- Start forward movement animation
+    self:StartForwardMovement()
+end
+
+function CameraController:StartForwardMovement()
+    print("CameraController: Starting forward movement simulation")
+    
+    -- Create a moving effect by slowly panning the camera forward
+    local camera = workspace.CurrentCamera
+    
+    -- Cancel any existing movement
+    if self.MovementConnection then
+        self.MovementConnection:Disconnect()
+    end
+    
+    self.MovementConnection = RunService.Heartbeat:Connect(function()
+        -- Move camera forward slowly to simulate space station movement
+        local currentCFrame = camera.CFrame
+        local forwardMovement = currentCFrame.LookVector * 0.5 -- Slow forward movement
+        camera.CFrame = currentCFrame + forwardMovement
+    end)
+end
+
+function CameraController:ResetCamera()
+    print("CameraController: Resetting camera from play mode")
+    
+    -- Stop forward movement
+    if self.MovementConnection then
+        self.MovementConnection:Disconnect()
+        self.MovementConnection = nil
+    end
+    
+    -- Reset to building camera mode
+    self:EnableTopDownCamera()
+end
+
 return CameraController
