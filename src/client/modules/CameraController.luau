@@ -374,24 +374,83 @@ function CameraController:SetTopDownView()
     local camera = workspace.CurrentCamera
     camera.CameraType = Enum.CameraType.Scriptable
     
-    -- Position camera high above the space station looking down
-    local stationCenter = Vector3.new(0, 30, 0) -- Adjust based on your station position
-    local cameraHeight = 200
+    -- Calculate the actual center of placed modules
+    local stationCenter = self:CalculateStationCenter()
+    local cameraHeight = 100 -- Good height to see the station clearly
     
     camera.CFrame = CFrame.new(
         stationCenter + Vector3.new(0, cameraHeight, 0),
         stationCenter
     )
     
+    -- Store the initial station center for movement calculations
+    self.StationCenter = stationCenter
+    
     -- Start forward movement animation
     self:StartForwardMovement()
+end
+
+function CameraController:SetBuildingSystem(buildingSystem)
+    self.BuildingSystem = buildingSystem
+end
+
+function CameraController:CalculateStationCenter()
+    -- Use BuildingSystem if available for more accurate module tracking
+    if self.BuildingSystem and self.BuildingSystem.PlacedModules then
+        local placedModules = self.BuildingSystem.PlacedModules
+        
+        if #placedModules == 0 then
+            -- No modules placed, use default building zone center
+            return Vector3.new(0, 30, 0)
+        end
+        
+        -- Calculate center of all placed modules
+        local totalPosition = Vector3.new(0, 0, 0)
+        for _, moduleData in ipairs(placedModules) do
+            if moduleData.Model and moduleData.Model.PrimaryPart then
+                totalPosition = totalPosition + moduleData.Model.PrimaryPart.Position
+            end
+        end
+        
+        local center = totalPosition / #placedModules
+        print("CameraController: Calculated station center from BuildingSystem at:", center)
+        return center
+    end
+    
+    -- Fallback: Find all placed modules in the workspace
+    local placedModules = {}
+    
+    -- Look for modules in the workspace
+    for _, obj in pairs(workspace:GetChildren()) do
+        if obj.Name:find("Module_") and obj:IsA("Model") then
+            table.insert(placedModules, obj)
+        end
+    end
+    
+    if #placedModules == 0 then
+        -- No modules placed, use default building zone center
+        return Vector3.new(0, 30, 0)
+    end
+    
+    -- Calculate center of all placed modules
+    local totalPosition = Vector3.new(0, 0, 0)
+    for _, module in ipairs(placedModules) do
+        if module.PrimaryPart then
+            totalPosition = totalPosition + module.PrimaryPart.Position
+        end
+    end
+    
+    local center = totalPosition / #placedModules
+    print("CameraController: Calculated station center from workspace at:", center)
+    return center
 end
 
 function CameraController:StartForwardMovement()
     print("CameraController: Starting forward movement simulation")
     
-    -- Create a moving effect by slowly panning the camera forward
+    -- Create a moving effect by moving both camera and station forward
     local camera = workspace.CurrentCamera
+    local forwardSpeed = 2 -- Speed of forward movement
     
     -- Cancel any existing movement
     if self.MovementConnection then
@@ -399,11 +458,70 @@ function CameraController:StartForwardMovement()
     end
     
     self.MovementConnection = RunService.Heartbeat:Connect(function()
-        -- Move camera forward slowly to simulate space station movement
+        -- Move camera forward
         local currentCFrame = camera.CFrame
-        local forwardMovement = currentCFrame.LookVector * 0.5 -- Slow forward movement
+        local forwardMovement = Vector3.new(0, 0, -forwardSpeed) -- Move forward in Z direction
         camera.CFrame = currentCFrame + forwardMovement
+        
+        -- Move all placed modules forward with the camera
+        self:MoveStationForward(forwardMovement)
+        
+        -- Update station center for camera tracking
+        self.StationCenter = self.StationCenter + forwardMovement
     end)
+end
+
+function CameraController:MoveStationForward(movement)
+    -- Use BuildingSystem if available for more reliable module movement
+    if self.BuildingSystem and self.BuildingSystem.PlacedModules then
+        local placedModules = self.BuildingSystem.PlacedModules
+        
+        for _, moduleData in ipairs(placedModules) do
+            if moduleData.Model then
+                -- Move the entire module
+                if moduleData.Model.PrimaryPart then
+                    moduleData.Model:SetPrimaryPartCFrame(moduleData.Model.PrimaryPart.CFrame + movement)
+                else
+                    -- If no PrimaryPart, move all parts
+                    for _, part in pairs(moduleData.Model:GetChildren()) do
+                        if part:IsA("BasePart") then
+                            part.CFrame = part.CFrame + movement
+                        end
+                    end
+                end
+                
+                -- Update the stored position in BuildingSystem
+                moduleData.Position = moduleData.Position + movement
+            end
+        end
+    else
+        -- Fallback: Find and move all placed modules in workspace
+        for _, obj in pairs(workspace:GetChildren()) do
+            if obj.Name:find("Module_") and obj:IsA("Model") then
+                -- Move the entire module
+                if obj.PrimaryPart then
+                    obj:SetPrimaryPartCFrame(obj.PrimaryPart.CFrame + movement)
+                else
+                    -- If no PrimaryPart, move all parts
+                    for _, part in pairs(obj:GetChildren()) do
+                        if part:IsA("BasePart") then
+                            part.CFrame = part.CFrame + movement
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Also move the building zone if it exists
+    local buildingZone = workspace:FindFirstChild("BuildingZone_" .. LocalPlayer.Name)
+    if buildingZone then
+        for _, obj in pairs(buildingZone:GetChildren()) do
+            if obj:IsA("BasePart") then
+                obj.CFrame = obj.CFrame + movement
+            end
+        end
+    end
 end
 
 function CameraController:ResetCamera()

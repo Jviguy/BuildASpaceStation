@@ -1725,9 +1725,6 @@ function BuildingSystem:HandleObjectClick()
 			
 			-- Show hover UI
 			if self.UIManager and self.UIManager.BuildingUI then
-				-- First test with a simple UI to make sure it works
-				self.UIManager.BuildingUI:TestHoverUI()
-				-- Then show the actual hover UI
 				self.UIManager.BuildingUI:ShowObjectHoverUI(placedModule, mousePosition)
 			end
 		else

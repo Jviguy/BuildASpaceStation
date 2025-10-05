@@ -23,7 +23,7 @@ function PlayUI.new(uiManager, missionDataManager, cameraController)
     
     -- Visual effects
     self.EffectsContainer = nil
-    
+
     -- Get mission data from manager
     self.MissionData = missionDataManager:GetMissionData()
 

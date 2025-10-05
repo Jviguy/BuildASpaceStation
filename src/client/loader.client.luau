@@ -98,6 +98,9 @@ local missionSetupUI = MissionSetupUI.new(uiManager, missionDataManager)
 local buildingUI = BuildingUI.new(uiManager, missionDataManager, buildingSystem)
 local playUI = PlayUI.new(uiManager, missionDataManager, cameraController)
 
+-- Pass BuildingSystem reference to CameraController for play mode
+cameraController:SetBuildingSystem(buildingSystem)
+
 -- Store direct reference to BuildingUI in UIManager for easy access
 uiManager.BuildingUI = buildingUI
 

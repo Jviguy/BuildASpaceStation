@@ -1874,42 +1874,6 @@ function BuildingUI:HidePlacementNameUI()
 	end
 end
 
--- Debug method to test hover UI
-function BuildingUI:TestHoverUI()
-	print("BuildingUI: Testing hover UI creation...")
-	
-	-- Create a simple test UI
-	local testGui = Instance.new("ScreenGui")
-	testGui.Name = "TestHoverUI"
-	testGui.DisplayOrder = 100
-	testGui.Parent = LocalPlayer.PlayerGui
-	
-	local testFrame = Instance.new("Frame")
-	testFrame.Size = UDim2.fromOffset(200, 100)
-	testFrame.Position = UDim2.fromOffset(100, 100)
-	testFrame.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Bright red for visibility
-	testFrame.BorderSizePixel = 0
-	testFrame.Parent = testGui
-	
-	local testLabel = Instance.new("TextLabel")
-	testLabel.Size = UDim2.fromScale(1, 1)
-	testLabel.BackgroundTransparency = 1
-	testLabel.Text = "TEST HOVER UI"
-	testLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	testLabel.TextScaled = true
-	testLabel.Font = Enum.Font.GothamBold
-	testLabel.Parent = testFrame
-	
-	print("BuildingUI: Test UI created and should be visible!")
-	
-	-- Auto-cleanup after 3 seconds
-	task.delay(3, function()
-		if testGui and testGui.Parent then
-			testGui:Destroy()
-			print("BuildingUI: Test UI cleaned up")
-		end
-	end)
-end
 
 function BuildingUI:Show(gui)
 	local attempts = 0
