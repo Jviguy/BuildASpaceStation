@@ -5,6 +5,9 @@ BuildingSystem.__index = BuildingSystem
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- Require centralized module data manager
+local ModuleDataManager = require(ReplicatedStorage.Shared.ModuleDataManager)
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -24,9 +27,9 @@ local PORT_SNAP_DISTANCE = 12 -- Increased from 8 for easier snapping
 
 -- Visual feedback colors
 local COLORS = {
-	VALID = Color3.fromRGB(100, 255, 150), -- Bright green
-	INVALID = Color3.fromRGB(255, 80, 80), -- Bright red
-	SNAPPING = Color3.fromRGB(150, 220, 255), -- Bright cyan/blue
+	VALID = Color3.fromRGB(150, 255, 150), -- Brighter green
+	INVALID = Color3.fromRGB(255, 100, 100), -- Brighter red
+	SNAPPING = Color3.fromRGB(100, 200, 255), -- Brighter cyan/blue
 	ZONE_BOUNDARY = Color3.fromRGB(100, 150, 255),
 	GRID = Color3.fromRGB(150, 150, 200),
 	STARTING_PLATFORM = Color3.fromRGB(80, 200, 120),
@@ -49,6 +52,10 @@ function BuildingSystem.new(cameraController, uiManager, toastNotification)
 	self.CameraController = cameraController
 	self.UIManager = uiManager
 	self.ToastNotification = toastNotification
+
+	-- Initialize module data manager
+	self.ModuleDataManager = ModuleDataManager.new()
+	self.ModuleDataManager:Initialize()
 
 	-- Building state management
 	self.IsActive = false
@@ -527,19 +534,20 @@ function BuildingSystem:CreateSnapIndicator()
 	-- Visual indicator for port snapping
 	self.SnapIndicator = Instance.new("Part")
 	self.SnapIndicator.Name = "SnapIndicator"
-	self.SnapIndicator.Size = Vector3.new(2, 2, 2)
+	self.SnapIndicator.Size = Vector3.new(3, 3, 3) -- Larger for better visibility
 	self.SnapIndicator.Shape = Enum.PartType.Ball
 	self.SnapIndicator.Anchored = true
 	self.SnapIndicator.CanCollide = false
 	self.SnapIndicator.Transparency = 1 -- Start hidden (1 = fully transparent)
-	self.SnapIndicator.Color = Color3.fromRGB(100, 255, 100)
+	self.SnapIndicator.Color = Color3.fromRGB(150, 255, 150) -- Brighter green
 	self.SnapIndicator.Material = Enum.Material.Neon
 	self.SnapIndicator.Parent = workspace
 
-	-- Add pulsing effect
+	-- Add pulsing effect with better visibility
 	local highlight = Instance.new("Highlight")
-	highlight.FillColor = Color3.fromRGB(100, 255, 100)
-	highlight.FillTransparency = 0.5
+	highlight.FillColor = Color3.fromRGB(150, 255, 150) -- Brighter green
+	highlight.FillTransparency = 0.2 -- More visible
+	highlight.OutlineColor = Color3.fromRGB(255, 255, 255) -- White outline
 	highlight.OutlineTransparency = 0
 	highlight.Enabled = false -- Start disabled
 	highlight.Parent = self.SnapIndicator
@@ -563,20 +571,23 @@ function BuildingSystem:CreatePreviewModel(moduleData)
 	end
 
 	-- Create a simple preview model (placeholder)
-	-- In production, this would load from ReplicatedStorage
+	-- In production, this would load from ReplicatedStorage using moduleData.model
 	local model = Instance.new("Model")
 	model.Name = "PreviewModel_" .. moduleData.id
 
-	-- Create main body based on size string (e.g., "4x3x2")
-	local sizeStr = moduleData.size
-	local dimensions = self:ParseSizeString(sizeStr)
+	-- Create main body based on JSON dimensions
+	local dimensions = Vector3.new(
+		moduleData.dimensions.width,
+		moduleData.dimensions.height,
+		moduleData.dimensions.depth
+	)
 
 	local mainPart = Instance.new("Part")
 	mainPart.Name = "MainBody"
 	mainPart.Size = dimensions
 	mainPart.Anchored = true
 	mainPart.CanCollide = false
-	mainPart.Transparency = 0.6 -- Fixed: More transparent for better ghost effect
+	mainPart.Transparency = 0.6 -- More transparent for better ghost effect
 	mainPart.Color = Color3.fromRGB(100, 150, 255)
 	mainPart.Material = Enum.Material.ForceField
 	mainPart.Parent = model
@@ -614,59 +625,106 @@ function BuildingSystem:ParseSizeString(sizeStr)
 end
 
 function BuildingSystem:AddModulePorts(model, mainPart, moduleData)
-	-- Add attachment points (ports) to the module
+	-- Add attachment points (ports) to the module using JSON port data
 	-- Ports are where modules can connect to each other
 
-	local size = mainPart.Size
-	local portPositions = {}
-
-	-- Determine port locations based on module type
-	if moduleData.category == "Connectors" then
-		-- Corridors have ports on both ends
-		table.insert(portPositions, { pos = Vector3.new(0, 0, size.Z / 2), name = "FrontPort" })
-		table.insert(portPositions, { pos = Vector3.new(0, 0, -size.Z / 2), name = "BackPort" })
-
-		if moduleData.id == "junction_cross" then
-			-- Cross junction has 4 ports
-			table.insert(portPositions, { pos = Vector3.new(size.X / 2, 0, 0), name = "RightPort" })
-			table.insert(portPositions, { pos = Vector3.new(-size.X / 2, 0, 0), name = "LeftPort" })
-		end
-	else
-		-- Standard modules have ports on all sides
-		table.insert(portPositions, { pos = Vector3.new(0, 0, size.Z / 2), name = "FrontPort" })
-		table.insert(portPositions, { pos = Vector3.new(0, 0, -size.Z / 2), name = "BackPort" })
-		table.insert(portPositions, { pos = Vector3.new(size.X / 2, 0, 0), name = "RightPort" })
-		table.insert(portPositions, { pos = Vector3.new(-size.X / 2, 0, 0), name = "LeftPort" })
+	if not moduleData.ports then
+		print("BuildingSystem: No ports defined for module:", moduleData.id)
+		return
 	end
 
-	-- Create port attachments
-	for _, portData in ipairs(portPositions) do
+	for _, portData in ipairs(moduleData.ports) do
+		-- Create port attachment
 		local attachment = Instance.new("Attachment")
-		attachment.Name = portData.name
-		attachment.Position = portData.pos
+		attachment.Name = portData.name .. "_Port"
+		
+		-- Convert JSON position array to Vector3 (already in studs, don't multiply by grid size)
+		-- Adjust port positions to be slightly inward from module edges for better snapping
+		local rawPosition = Vector3.new(
+			portData.position[1],
+			portData.position[2],
+			portData.position[3]
+		)
+		
+		-- Convert JSON direction array to Vector3
+		local direction = Vector3.new(
+			portData.direction[1],
+			portData.direction[2],
+			portData.direction[3]
+		)
+		
+		-- Apply a small inward offset (0.2 studs) to prevent ports from being at exact edges
+		local inwardOffset = 0.2 -- Reduced from 0.5 to make connections tighter
+		local position = rawPosition - (direction * inwardOffset)
+		attachment.Position = position
+		
+		-- Set attachment orientation
+		attachment.Axis = direction
 		attachment.Parent = mainPart
 
-		-- Visual indicator for port
+		-- Create visual indicator for the port
 		local portIndicator = Instance.new("Part")
-		portIndicator.Name = "Port_" .. portData.name
-		portIndicator.Size = Vector3.new(1, 1, 1)
-		portIndicator.Shape = Enum.PartType.Cylinder
-		portIndicator.Position = mainPart.Position + portData.pos
+		portIndicator.Name = portData.name .. "_Indicator"
+		portIndicator.Size = Vector3.new(0.5, 0.5, 0.5)
+		portIndicator.Shape = Enum.PartType.Ball
+		portIndicator.Material = Enum.Material.Neon
 		portIndicator.Anchored = true
 		portIndicator.CanCollide = false
-		portIndicator.Transparency = 0.7
-		portIndicator.Color = Color3.fromRGB(255, 200, 100)
-		portIndicator.Material = Enum.Material.Neon
+		portIndicator.Transparency = 0.3
+		
+		-- Color based on port type
+		if portData.type == "power" then
+			portIndicator.Color = Color3.fromRGB(255, 255, 0) -- Yellow for power
+		elseif portData.type == "data" then
+			portIndicator.Color = Color3.fromRGB(0, 255, 255) -- Cyan for data
+		elseif portData.type == "docking" then
+			portIndicator.Color = Color3.fromRGB(0, 255, 0) -- Green for docking
+		else
+			portIndicator.Color = Color3.fromRGB(255, 255, 255) -- White for standard
+		end
+		
+		-- Position the port indicator relative to the main part's CFrame
+		-- Convert adjusted local position to world position using the part's CFrame
+		local worldPosition = mainPart.CFrame:PointToWorldSpace(position)
+		portIndicator.Position = worldPosition
 		portIndicator.Parent = model
 
-		-- Orient cylinder to point outward
-		local direction = portData.pos.Unit
-		if math.abs(direction.X) > 0.5 then
-			portIndicator.Orientation = Vector3.new(0, 0, 90)
-		elseif math.abs(direction.Z) > 0.5 then
-			portIndicator.Orientation = Vector3.new(90, 0, 0)
-		end
+		print("BuildingSystem: Created port:", portData.name, "at raw position:", rawPosition, "adjusted position:", position, "world position:", worldPosition)
 	end
+
+	print("BuildingSystem: Added", #moduleData.ports, "ports to module:", moduleData.id)
+end
+
+function BuildingSystem:SnapToGrid(position)
+	-- Snap position to building grid
+	local gridSize = BUILDING_ZONE.GridSize
+
+	-- Get lane position to use as reference point for snapping
+	local lanePos = BUILDING_ZONE.StartPosition
+
+	-- Calculate offset from lane position
+	local offset = position - lanePos
+
+	-- Snap to grid (renamed local variable to avoid shadowing)
+	local size = gridSize
+	local snappedOffset = Vector3.new(
+		math.round(offset.X / size) * size,
+		math.round(offset.Y / size) * size,
+		math.round(offset.Z / size) * size
+	)
+
+	-- Return snapped world position
+	return lanePos + snappedOffset
+end
+
+function BuildingSystem:CalculateSnapPosition(mousePosition, previewModel)
+	-- Cast ray from camera through mouse position to find placement position
+	local camera = workspace.CurrentCamera
+	local _ray = camera:ScreenPointToRay(mousePosition.X, mousePosition.Y)
+
+	-- TODO: Complete implementation of CalculateSnapPosition
+	-- For now, return a default position
+	return Vector3.new(0, 100, 0)
 end
 
 function BuildingSystem:StartBuilding()
@@ -919,12 +977,12 @@ function BuildingSystem:UpdatePreview()
 
 		-- Show snap indicator with improved visibility
 		self.SnapIndicator.Position = nearestSnap.portPosition
-		self.SnapIndicator.Transparency = 0.1 -- More visible
-		self.SnapIndicator.Size = Vector3.new(3, 3, 3) -- Larger for better visibility
+		self.SnapIndicator.Transparency = 0.05 -- Much more visible (was 0.1)
+		self.SnapIndicator.Size = Vector3.new(4, 4, 4) -- Even larger for better visibility
 		local highlight = self.SnapIndicator:FindFirstChildOfClass("Highlight")
 		if highlight then
 			highlight.Enabled = true
-			highlight.FillTransparency = 0.3
+			highlight.FillTransparency = 0.1 -- More visible (was 0.3)
 			highlight.OutlineTransparency = 0
 		end
 
@@ -1016,13 +1074,11 @@ function BuildingSystem:FindAllValidSnapPositions(correctY)
 
 							-- Only add if no collision
 							if not wouldCollide then
+								-- Use the actual target port world position for the snap indicator
+								local snapIndicatorPos = targetPort.WorldPosition
 								table.insert(validSnaps, {
 									position = snapPosition,
-									portPosition = Vector3.new(
-										targetPort.WorldPosition.X,
-										correctY,
-										targetPort.WorldPosition.Z
-									),
+									portPosition = snapIndicatorPos, -- Use actual port position, not forced Y
 									targetPort = targetPort,
 									previewPort = previewPort,
 								})
@@ -1045,13 +1101,13 @@ function BuildingSystem:CalculateSnapPosition(targetPort, targetPart, previewPor
 		return nil
 	end
 
-	-- Get port LOCAL positions (relative to part center)
+	-- Get port LOCAL positions and directions from attachments
 	local targetPortLocal = targetPort.Position
 	local previewPortLocal = previewPort.Position
-
-	-- Get port directions in LOCAL space
-	local targetPortDirLocal = self:GetPortDirectionFromLocal(targetPortLocal, targetPart)
-	local previewPortDirLocal = self:GetPortDirectionFromLocal(previewPortLocal, self.PreviewModel.PrimaryPart)
+	
+	-- Use the actual attachment axis (stored from JSON) instead of calculating from position
+	local targetPortDirLocal = targetPort.Axis
+	local previewPortDirLocal = previewPort.Axis
 
 	-- Apply rotation to preview port direction
 	local rotationCFrame = CFrame.Angles(0, math.rad(self.CurrentRotation), 0)
@@ -1079,10 +1135,10 @@ function BuildingSystem:CalculateSnapPosition(targetPort, targetPart, previewPor
 	-- Get target port position in world space
 	local targetPortWorldPos = targetPort.WorldPosition
 
-	-- Small gap to prevent Z-fighting and make connections clear
-	local connectionGap = 0.1
-
-	-- Calculate where the preview port should be in world space
+	-- Connect modules directly - minimal gap for clean connections
+	-- Since both ports are moved 0.2 studs inward, we need a small gap to prevent overlap
+	-- Total inward offset = 0.4 studs (0.2 each), so use a tiny gap for clean connection
+	local connectionGap = 0.1 -- Small gap for clean visual connection
 	local previewPortTargetWorldPos = targetPortWorldPos + (targetPortDirWorld * connectionGap)
 
 	-- Get preview port offset from module center (after applying rotation)
@@ -1191,36 +1247,17 @@ function BuildingSystem:FindClosestPreviewPort(targetPortPosition)
 end
 
 function BuildingSystem:GetPortDirection(portAttachment)
-	-- Determine which direction a port is facing based on its local position
-	-- Ports are positioned on the edges of modules, so we can determine direction
-	-- from their relative position to the module center
-
+	-- Use the actual attachment axis (stored from JSON) instead of calculating from position
 	if not portAttachment or not portAttachment.Parent then
 		return Vector3.new(0, 0, 1) -- Default forward
 	end
 
-	local portPos = portAttachment.Position -- Local position relative to PrimaryPart
+	-- Get the direction from the attachment's axis (set from JSON data)
+	local localDirection = portAttachment.Axis
 	local primaryPart = portAttachment.Parent
 
-	-- Determine the dominant axis (which side of the module this port is on)
-	local absX = math.abs(portPos.X)
-	local absY = math.abs(portPos.Y)
-	local absZ = math.abs(portPos.Z)
-
-	local direction
-	if absX > absY and absX > absZ then
-		-- Port is on X axis (left or right side)
-		direction = Vector3.new(sign(portPos.X), 0, 0)
-	elseif absY > absX and absY > absZ then
-		-- Port is on Y axis (top or bottom)
-		direction = Vector3.new(0, sign(portPos.Y), 0)
-	else
-		-- Port is on Z axis (front or back)
-		direction = Vector3.new(0, 0, sign(portPos.Z))
-	end
-
 	-- Transform to world space using the part's CFrame
-	local worldDirection = primaryPart.CFrame:VectorToWorldSpace(direction)
+	local worldDirection = primaryPart.CFrame:VectorToWorldSpace(localDirection)
 	return worldDirection.Unit
 end
 
@@ -1353,12 +1390,12 @@ function BuildingSystem:SetPreviewColor(color, pulseAlpha)
 		if part:IsA("Highlight") then
 			part.FillColor = color
 			part.OutlineColor = color
-			-- Subtle pulse on transparency
-			part.FillTransparency = 0.35 + (pulseAlpha * 0.15) -- Range: 0.35 to 0.50
-			part.OutlineTransparency = 0.15 + (pulseAlpha * 0.1) -- Range: 0.15 to 0.25
+			-- Much more visible - reduced transparency
+			part.FillTransparency = 0.15 + (pulseAlpha * 0.1) -- Range: 0.15 to 0.25 (was 0.35-0.50)
+			part.OutlineTransparency = 0.05 + (pulseAlpha * 0.05) -- Range: 0.05 to 0.10 (was 0.15-0.25)
 		elseif part:IsA("BasePart") and not part.Name:find("Port_") then
-			-- Subtle pulse on main part transparency
-			part.Transparency = 0.55 + (pulseAlpha * 0.15) -- Range: 0.55 to 0.70
+			-- Much more visible main parts
+			part.Transparency = 0.25 + (pulseAlpha * 0.1) -- Range: 0.25 to 0.35 (was 0.55-0.70)
 		end
 	end
 end

@@ -49,19 +49,19 @@ function ToastNotification:Initialize()
 	self.ToastContainer.DisplayOrder = 1000 -- High priority
 	self.ToastContainer.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-	-- Create frame to hold toasts vertically
+	-- Create frame to hold toasts vertically in bottom right
 	local toastHolder = Instance.new("Frame")
 	toastHolder.Name = "ToastHolder"
-	toastHolder.Size = UDim2.fromScale(0.4, 0.5)
-	toastHolder.Position = UDim2.fromScale(0.3, 0.05) -- Top-center
+	toastHolder.Size = UDim2.fromScale(0.3, 0.4) -- 30% width, 40% height
+	toastHolder.Position = UDim2.fromScale(0.68, 0.55) -- Bottom right area (68% right, 55% down)
 	toastHolder.BackgroundTransparency = 1
 	toastHolder.Parent = self.ToastContainer
 
-	-- Add list layout for stacking toasts
+	-- Add list layout for stacking toasts from bottom up
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Vertical
-	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	listLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	listLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom -- Stack from bottom
 	listLayout.Padding = UDim.new(0, 10)
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Parent = toastHolder
@@ -104,6 +104,19 @@ end
 
 function ToastNotification:CreateToast(message, toastType)
 	local typeData = TOAST_TYPES[toastType] or TOAST_TYPES.INFO
+
+	-- Limit to 3 toasts maximum - remove oldest if we exceed the limit
+	local MAX_TOASTS = 3
+	while #self.ActiveToasts >= MAX_TOASTS do
+		local oldestToast = self.ActiveToasts[1]
+		if oldestToast then
+			self:DismissToast(oldestToast)
+			-- Wait a moment for the dismissal to process
+			task.wait(0.1)
+		else
+			break
+		end
+	end
 
 	-- Create toast frame
 	local toast = Instance.new("Frame")

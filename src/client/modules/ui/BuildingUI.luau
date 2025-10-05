@@ -3,13 +3,14 @@ BuildingUI.__index = BuildingUI
 
 -- Services
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 
 -- Require UIHelpers for consistent styling
 local UIHelpers = require(script.Parent.UIHelpers)
 
 -- Require centralized module data manager
-local ModuleDataManager = require(script.Parent.Parent.Parent.shared.ModuleDataManager)
+local ModuleDataManager = require(ReplicatedStorage.Shared.ModuleDataManager)
 
 function BuildingUI.new(uiManager, missionDataManager, buildingSystem)
 	local self = setmetatable({}, BuildingUI)
@@ -54,8 +55,7 @@ function BuildingUI:Create()
 	self.ScreenGui.IgnoreGuiInset = true
 
 	-- Create bottom catalog (starts visible with categories)
-	self:CreateCatalogContainer()
-	self:CreateCategoryView()
+	self:CreateModuleCatalog()
 
 	-- Create confirm/cancel UI (starts hidden)
 	self:CreateConfirmCancelUI()
@@ -64,10 +64,10 @@ function BuildingUI:Create()
 end
 
 function BuildingUI:CreateModuleCatalog()
-	-- Main catalog container at bottom (25% of screen)
+	-- Main catalog container at bottom (45% of screen) - Increased from 35% to make modules look better
 	self.CatalogFrame = Instance.new("Frame")
-	self.CatalogFrame.Size = UDim2.new(1, 0, 0.28, 0)
-	self.CatalogFrame.Position = UDim2.new(0, 0, 0.72, 0)
+	self.CatalogFrame.Size = UDim2.new(1, 0, 0.45, 0)
+	self.CatalogFrame.Position = UDim2.new(0, 0, 0.55, 0)
 	self.CatalogFrame.BackgroundColor3 = Color3.fromRGB(15, 22, 40)
 	self.CatalogFrame.BorderSizePixel = 0
 	self.CatalogFrame.ZIndex = 100
@@ -82,7 +82,7 @@ function BuildingUI:CreateModuleCatalog()
 	topStripe.ZIndex = 101
 	topStripe.Parent = self.CatalogFrame
 
-	-- Header section
+	-- Header section with title and back button
 	local headerFrame = Instance.new("Frame")
 	headerFrame.Size = UDim2.new(1, 0, 0.22, 0)
 	headerFrame.Position = UDim2.new(0, 0, 0.02, 0)
@@ -90,43 +90,56 @@ function BuildingUI:CreateModuleCatalog()
 	headerFrame.ZIndex = 101
 	headerFrame.Parent = self.CatalogFrame
 
-	-- Catalog title
-	local titleLabel = Instance.new("TextLabel")
-	titleLabel.Size = UDim2.new(0.3, 0, 1, 0)
-	titleLabel.Position = UDim2.new(0.02, 0, 0, 0)
-	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = "MODULE CATALOG"
-	titleLabel.TextColor3 = UIHelpers.Colors.Text
-	titleLabel.TextSize = 24
-	titleLabel.Font = Enum.Font.GothamBold
-	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-	titleLabel.ZIndex = 101
-	titleLabel.Parent = headerFrame
+	-- Back button (initially hidden)
+	self.BackButton = Instance.new("TextButton")
+	self.BackButton.Size = UDim2.new(0, 150, 0.8, 0)
+	self.BackButton.Position = UDim2.new(0, 20, 0.1, 0)
+	self.BackButton.BackgroundColor3 = Color3.fromRGB(60, 80, 120)
+	self.BackButton.BorderSizePixel = 0
+	self.BackButton.Text = "← Back to Categories"
+	self.BackButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	self.BackButton.TextSize = 12
+	self.BackButton.Font = Enum.Font.GothamBold
+	self.BackButton.ZIndex = 102
+	self.BackButton.Visible = false
+	self.BackButton.Parent = headerFrame
 
-	-- Subtitle
-	local subtitleLabel = Instance.new("TextLabel")
-	subtitleLabel.Size = UDim2.new(0.4, 0, 0.5, 0)
-	subtitleLabel.Position = UDim2.new(0.35, 0, 0.5, 0)
-	subtitleLabel.BackgroundTransparency = 1
-	subtitleLabel.Text = "Select a module to place on the station"
-	subtitleLabel.TextColor3 = UIHelpers.Colors.TextDim
-	subtitleLabel.TextSize = 14
-	subtitleLabel.Font = Enum.Font.Gotham
-	subtitleLabel.TextXAlignment = Enum.TextXAlignment.Left
-	subtitleLabel.ZIndex = 101
-	subtitleLabel.Parent = headerFrame
+	-- Add corner radius to back button
+	local backCorner = Instance.new("UICorner")
+	backCorner.CornerRadius = UDim.new(0, 6)
+	backCorner.Parent = self.BackButton
+
+	-- Connect back button
+	self.BackButton.MouseButton1Click:Connect(function()
+		self:NavigateBack()
+	end)
+
+	-- Title label
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Size = UDim2.new(0.6, 0, 0.5, 0)
+	titleLabel.Position = UDim2.new(0.35, 0, 0.5, 0)
+	titleLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Text = "SELECT MODULE CATEGORY"
+	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	titleLabel.TextSize = 16
+	titleLabel.Font = Enum.Font.GothamBold
+	titleLabel.ZIndex = 102
+	titleLabel.Parent = headerFrame
+	
+	self.TitleLabel = titleLabel
 
 	-- "Complete Building" button in header - BIGGER VERSION
 	local completeButton = UIHelpers.CreateRoundedButton({
-		Size = UDim2.new(0, 200, 0.25, 0), -- Increased from 160x0.18 to 200x0.25
-		Position = UDim2.new(1, -210, 0.02, 0),
+		Size = UDim2.new(0, 250, 0.35, 0), -- Increased from 200x0.25 to 250x0.35
+		Position = UDim2.new(1, -260, 0.02, 0), -- Adjusted position for larger size
 		Text = "🚀 START MISSION",
-		TextSize = 16, -- Increased from 13
+		TextSize = 18, -- Increased from 16
 		BackgroundColor = UIHelpers.Colors.Success,
 		StrokeColor = Color3.fromRGB(100, 220, 140),
 		HoverColor = Color3.fromRGB(100, 220, 140),
 		HoverStrokeColor = Color3.fromRGB(120, 240, 160),
-		CornerRadius = 10, -- Increased from 8
+		CornerRadius = 12, -- Increased from 10
 		ZIndex = 102,
 	})
 	completeButton.Font = Enum.Font.GothamBold
@@ -136,40 +149,205 @@ function BuildingUI:CreateModuleCatalog()
 		self:ShowRequirementsUI()
 	end)
 
-	-- Scrolling frame for module cards
+	-- Create category selection view
+	self:CreateCategoryView()
+
+	print("BuildingUI: Category-based catalog created")
+end
+
+function BuildingUI:CreateCategoryView()
+	-- Category selection frame - Use more of the available space (increased height)
+	self.CategoryFrame = Instance.new("Frame")
+	self.CategoryFrame.Size = UDim2.new(0.96, 0, 0.75, 0) -- Increased height for better module display
+	self.CategoryFrame.Position = UDim2.new(0.02, 0, 0.23, 0)
+	self.CategoryFrame.BackgroundTransparency = 1
+	self.CategoryFrame.ZIndex = 101
+	self.CategoryFrame.Parent = self.CatalogFrame
+
+	-- Horizontal scroll frame for categories
 	local scrollFrame = Instance.new("ScrollingFrame")
-	scrollFrame.Size = UDim2.new(0.96, 0, 0.7, 0)
-	scrollFrame.Position = UDim2.new(0.02, 0, 0.28, 0)
+	scrollFrame.Size = UDim2.new(1, 0, 1, 0)
+	scrollFrame.Position = UDim2.new(0, 0, 0, 0)
 	scrollFrame.BackgroundTransparency = 1
 	scrollFrame.BorderSizePixel = 0
-	scrollFrame.ScrollBarThickness = 6
+	scrollFrame.ScrollBarThickness = 8
 	scrollFrame.ScrollBarImageColor3 = UIHelpers.Colors.Accent
-	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scrollFrame.ScrollingDirection = Enum.ScrollingDirection.X -- Horizontal scrolling
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0) -- Will be updated by layout
 	scrollFrame.ZIndex = 101
-	scrollFrame.Parent = self.CatalogFrame
+	scrollFrame.Parent = self.CategoryFrame
 
-	-- Add UIListLayout for automatic horizontal scrolling
+	-- Horizontal list layout for categories
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Horizontal
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-	listLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-	listLayout.Padding = UDim.new(0, 12)
+	listLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Padding = UDim.new(0, 20) -- 20px spacing between cards
 	listLayout.Parent = scrollFrame
 
-	-- Create module cards
-	for i, moduleData in ipairs(MODULE_CATALOG) do
-		local card = self:CreateModuleCard(moduleData, i)
-		card.Parent = scrollFrame
-		self.ModuleButtons[i] = card
-	end
+	-- Add padding to prevent leftmost card from being cut off
+	local leftPadding = Instance.new("Frame")
+	leftPadding.Size = UDim2.fromOffset(20, 1) -- 20px left padding
+	leftPadding.BackgroundTransparency = 1
+	leftPadding.LayoutOrder = 0 -- First in the list
+	leftPadding.Parent = scrollFrame
 
-	-- Update canvas size after adding all cards
-	local contentSize = listLayout.AbsoluteContentSize
-	scrollFrame.CanvasSize = UDim2.new(0, contentSize.X + 20, 0, 0)
+	-- Load and create category cards
+	self:LoadCategoryCards(scrollFrame)
 
+	-- Update scroll canvas size for horizontal scrolling
 	listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-		scrollFrame.CanvasSize = UDim2.new(0, listLayout.AbsoluteContentSize.X + 20, 0, 0)
+		scrollFrame.CanvasSize = UDim2.new(0, listLayout.AbsoluteContentSize.X + 40, 0, 0)
 	end)
+
+	print("BuildingUI: Category view created with horizontal scrolling")
+end
+
+function BuildingUI:LoadCategoryCards(parent)
+	print("BuildingUI: LoadCategoryCards called")
+	
+	-- Wait for module data to load
+	print("BuildingUI: Waiting for module data to load...")
+	self.ModuleDataManager:WaitForLoad()
+	print("BuildingUI: Module data loaded, getting categories...")
+	
+	local categories = self.ModuleDataManager:GetCategories()
+	print("BuildingUI: Got", #categories, "categories")
+	
+	-- If no categories loaded, show error
+	if #categories == 0 then
+		warn("BuildingUI: No categories loaded from data manager")
+		warn("BuildingUI: Check that module_categories.json exists and is properly formatted")
+		return
+	end
+	
+	-- Debug: Print each category
+	for i, category in ipairs(categories) do
+		print("BuildingUI: Category", i, ":", category.name, "- Icon:", category.icon, "- Color:", category.color)
+	end
+	
+	-- Create cards
+	for i, category in ipairs(categories) do
+		print("BuildingUI: Creating card", i, "for category:", category.name)
+		local card = self:CreateCategoryCard(category, i)
+		card.Parent = parent
+		table.insert(self.CategoryButtons, card)
+		print("BuildingUI: Card", i, "created and parented")
+	end
+	
+	print("BuildingUI: Loaded", #categories, "category cards")
+	
+	-- Force update the scroll canvas size
+	task.wait(0.1)
+	local listLayout = parent:FindFirstChildOfClass("UIListLayout")
+	if listLayout then
+		parent.CanvasSize = UDim2.new(0, listLayout.AbsoluteContentSize.X + 40, 0, 0)
+		print("BuildingUI: Updated canvas size to:", listLayout.AbsoluteContentSize.X + 40)
+	end
+end
+
+function BuildingUI:CreateCategoryCard(category, index)
+	print("BuildingUI: Creating category card for:", category.name)
+	
+	-- Main card frame with fixed size for horizontal layout
+	local card = Instance.new("Frame")
+	card.Size = UDim2.fromOffset(220, 140) -- Fixed size: 220px wide, 140px tall
+	card.BackgroundColor3 = Color3.fromRGB(25, 35, 55)
+	card.BorderSizePixel = 0
+	card.LayoutOrder = index + 1 -- +1 to account for left padding frame
+	card.ZIndex = 102
+	card.Name = "CategoryCard_" .. category.id
+
+	print("BuildingUI: Card frame created, size:", card.Size)
+
+	-- Card corner radius
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = card
+
+	-- Card stroke with category color
+	local stroke = Instance.new("UIStroke")
+	local categoryColor = category.color or "#4CAF50"
+	-- Convert hex color to Color3
+	local r = tonumber(categoryColor:sub(2, 3), 16) or 76
+	local g = tonumber(categoryColor:sub(4, 5), 16) or 175
+	local b = tonumber(categoryColor:sub(6, 7), 16) or 80
+	stroke.Color = Color3.fromRGB(r, g, b)
+	stroke.Thickness = 2
+	stroke.Parent = card
+
+	print("BuildingUI: Card styled with color:", stroke.Color)
+
+	-- Hover effect
+	local originalColor = stroke.Color
+	card.MouseEnter:Connect(function()
+		stroke.Color = Color3.fromRGB(255, 255, 255)
+	end)
+	card.MouseLeave:Connect(function()
+		stroke.Color = originalColor
+	end)
+
+	-- Icon
+	local icon = Instance.new("TextLabel")
+	icon.Size = UDim2.fromOffset(50, 50)
+	icon.Position = UDim2.new(0.5, 0, 0, 20)
+	icon.AnchorPoint = Vector2.new(0.5, 0)
+	icon.BackgroundTransparency = 1
+	icon.Text = category.icon
+	icon.TextSize = 40
+	icon.TextColor3 = Color3.fromRGB(255, 255, 255)
+	icon.ZIndex = 103
+	icon.Name = "Icon"
+	icon.Parent = card
+
+	-- Name label
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Size = UDim2.new(0.9, 0, 0, 25)
+	nameLabel.Position = UDim2.new(0.05, 0, 0, 75)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = category.name
+	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.TextSize = 14
+	nameLabel.Font = Enum.Font.GothamBold
+	nameLabel.TextWrapped = true
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Center
+	nameLabel.ZIndex = 103
+	nameLabel.Name = "NameLabel"
+	nameLabel.Parent = card
+
+	-- Description label
+	local descLabel = Instance.new("TextLabel")
+	descLabel.Size = UDim2.new(0.9, 0, 0, 35)
+	descLabel.Position = UDim2.new(0.05, 0, 0, 100)
+	descLabel.BackgroundTransparency = 1
+	descLabel.Text = category.description
+	descLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+	descLabel.TextSize = 10
+	descLabel.Font = Enum.Font.Gotham
+	descLabel.TextWrapped = true
+	descLabel.TextXAlignment = Enum.TextXAlignment.Center
+	descLabel.ZIndex = 103
+	descLabel.Name = "DescLabel"
+	descLabel.Parent = card
+
+	-- Click button (invisible overlay)
+	local clickButton = Instance.new("TextButton")
+	clickButton.Size = UDim2.new(1, 0, 1, 0)
+	clickButton.BackgroundTransparency = 1
+	clickButton.Text = ""
+	clickButton.ZIndex = 104
+	clickButton.Name = "ClickButton"
+	clickButton.Parent = card
+
+	-- Connect click event
+	clickButton.MouseButton1Click:Connect(function()
+		print("BuildingUI: Category clicked:", category.name)
+		self:SelectCategory(category)
+	end)
+
+	print("BuildingUI: Category card completed for:", category.name, "with", #card:GetChildren(), "children")
+	return card
 end
 
 function BuildingUI:CreateModuleCard(moduleData, index)
@@ -247,12 +425,16 @@ function BuildingUI:CreateModuleCard(moduleData, index)
 	statsFrame.ZIndex = 103
 	statsFrame.Parent = card
 
-	-- Size stat
+	-- Size stat - use new JSON structure
 	local sizeLabel = Instance.new("TextLabel")
 	sizeLabel.Size = UDim2.new(1, 0, 0.45, 0)
 	sizeLabel.Position = UDim2.new(0, 0, 0, 0)
 	sizeLabel.BackgroundTransparency = 1
-	sizeLabel.Text = "📏 Size: " .. moduleData.size
+	local sizeText = "N/A"
+	if moduleData.dimensions then
+		sizeText = moduleData.dimensions.width .. "x" .. moduleData.dimensions.height .. "x" .. moduleData.dimensions.depth
+	end
+	sizeLabel.Text = "📏 Size: " .. sizeText
 	sizeLabel.TextColor3 = UIHelpers.Colors.TextDim
 	sizeLabel.TextSize = 11
 	sizeLabel.Font = Enum.Font.Gotham
@@ -260,15 +442,30 @@ function BuildingUI:CreateModuleCard(moduleData, index)
 	sizeLabel.ZIndex = 103
 	sizeLabel.Parent = statsFrame
 
-	-- Power stat
+	-- Power stat - use new JSON structure
 	local powerLabel = Instance.new("TextLabel")
 	powerLabel.Size = UDim2.new(1, 0, 0.45, 0)
 	powerLabel.Position = UDim2.new(0, 0, 0.55, 0)
 	powerLabel.BackgroundTransparency = 1
-	local powerText = moduleData.power > 0 and "+" .. moduleData.power .. "W" or moduleData.power .. "W"
-	local powerIcon = moduleData.power > 0 and "⚡" or "🔋"
+	local powerText = "N/A"
+	local powerIcon = "⚡"
+	if moduleData.power then
+		local consumption = moduleData.power.consumption or 0
+		local generation = moduleData.power.generation or 0
+		local netPower = generation - consumption
+		if netPower > 0 then
+			powerText = "+" .. netPower .. "W"
+			powerIcon = "🔋"
+		elseif netPower < 0 then
+			powerText = netPower .. "W"
+			powerIcon = "⚡"
+		else
+			powerText = "0W"
+			powerIcon = "⚡"
+		end
+	end
 	powerLabel.Text = powerIcon .. " Power: " .. powerText
-	powerLabel.TextColor3 = moduleData.power > 0 and Color3.fromRGB(255, 200, 100) or Color3.fromRGB(100, 220, 140)
+	powerLabel.TextColor3 = (powerText:sub(1,1) == "+") and Color3.fromRGB(100, 220, 140) or Color3.fromRGB(255, 200, 100)
 	powerLabel.TextSize = 11
 	powerLabel.Font = Enum.Font.Gotham
 	powerLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -428,48 +625,214 @@ function BuildingUI:CreateConfirmCancelUI()
 	end)
 end
 
+-- CATEGORY NAVIGATION METHODS
+function BuildingUI:SelectCategory(category)
+	print("BuildingUI: Selected category:", category.name)
+	
+	-- Update navigation state
+	self.CurrentView = "modules"
+	self.CurrentCategory = category
+	
+	-- Update title
+	if self.TitleLabel then
+		self.TitleLabel.Text = category.name:upper()
+	end
+	
+	-- Show back button
+	if self.BackButton then
+		self.BackButton.Visible = true
+	end
+	
+	-- Hide category view
+	if self.CategoryFrame then
+		self.CategoryFrame.Visible = false
+	end
+	
+	-- Create or show module view
+	if not self.ModuleFrame then
+		self:CreateModuleView(category.id)
+	else
+		-- Clear existing modules and reload for new category
+		for _, child in ipairs(self.ModuleFrame:GetChildren()) do
+			if child:IsA("ScrollingFrame") then
+				for _, moduleCard in ipairs(child:GetChildren()) do
+					if moduleCard:IsA("Frame") then
+						moduleCard:Destroy()
+					end
+				end
+			end
+		end
+		self:LoadModuleCards(self.ModuleFrame:FindFirstChild("ScrollingFrame"), category.id)
+	end
+	
+	-- Show module view
+	if self.ModuleFrame then
+		self.ModuleFrame.Visible = true
+	end
+	
+	print("BuildingUI: Category navigation completed")
+end
+
+function BuildingUI:NavigateBack()
+	print("BuildingUI: Navigating back to categories")
+	
+	-- Update navigation state
+	self.CurrentView = "categories"
+	self.CurrentCategory = nil
+	
+	-- Update title
+	if self.TitleLabel then
+		self.TitleLabel.Text = "SELECT MODULE CATEGORY"
+	end
+	
+	-- Hide back button
+	if self.BackButton then
+		self.BackButton.Visible = false
+	end
+	
+	-- Hide module view
+	if self.ModuleFrame then
+		self.ModuleFrame.Visible = false
+	end
+	
+	-- Show category view
+	if self.CategoryFrame then
+		self.CategoryFrame.Visible = true
+	end
+	
+	print("BuildingUI: Back navigation completed")
+end
+
+function BuildingUI:CreateModuleView(categoryId)
+	print("BuildingUI: Creating module view for category:", categoryId)
+	
+	-- Module selection frame (initially hidden) - Use more space for better module display
+	self.ModuleFrame = Instance.new("Frame")
+	self.ModuleFrame.Size = UDim2.new(0.96, 0, 0.75, 0) -- Increased height to match category frame
+	self.ModuleFrame.Position = UDim2.new(0.02, 0, 0.23, 0) -- Same position as category frame
+	self.ModuleFrame.BackgroundTransparency = 1
+	self.ModuleFrame.ZIndex = 101
+	self.ModuleFrame.Visible = false
+	self.ModuleFrame.Parent = self.CatalogFrame
+
+	-- Scrolling frame for modules
+	local scrollFrame = Instance.new("ScrollingFrame")
+	scrollFrame.Size = UDim2.new(1, 0, 1, 0)
+	scrollFrame.Position = UDim2.new(0, 0, 0, 0)
+	scrollFrame.BackgroundTransparency = 1
+	scrollFrame.BorderSizePixel = 0
+	scrollFrame.ScrollBarThickness = 6
+	scrollFrame.ScrollBarImageColor3 = UIHelpers.Colors.Accent
+	scrollFrame.ZIndex = 101
+	scrollFrame.Parent = self.ModuleFrame
+
+	-- Horizontal list layout for module cards
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.FillDirection = Enum.FillDirection.Horizontal
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Padding = UDim.new(0, 12)
+	listLayout.Parent = scrollFrame
+
+	-- Load modules for this category
+	self:LoadModuleCards(scrollFrame, categoryId)
+
+	-- Update canvas size based on content
+	listLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+		scrollFrame.CanvasSize = UDim2.fromOffset(listLayout.AbsoluteContentSize.X + 20, 0)
+	end)
+
+	print("BuildingUI: Module view created for category:", categoryId)
+end
+
+function BuildingUI:LoadModuleCards(parent, categoryId)
+	print("BuildingUI: Loading module cards for category:", categoryId)
+	
+	-- Wait for module data to load
+	self.ModuleDataManager:WaitForLoad()
+	
+	local modules = self.ModuleDataManager:GetModulesByCategory(categoryId)
+	print("BuildingUI: Got", #modules, "modules for category:", categoryId)
+	
+	-- If no modules loaded, show error instead of fallbacks
+	if #modules == 0 then
+		warn("BuildingUI: No modules loaded for category:", categoryId)
+		warn("BuildingUI: Check that JSON files exist and are properly formatted")
+		return
+	end
+	
+	-- Clear existing module buttons
+	self.ModuleButtons = {}
+	
+	-- Debug: Print each module
+	for i, moduleData in ipairs(modules) do
+		print("BuildingUI: Module", i, ":", moduleData.name, "- Icon:", moduleData.icon)
+	end
+	
+	for i, moduleData in ipairs(modules) do
+		print("BuildingUI: Creating module card", i, "for:", moduleData.name)
+		local card = self:CreateModuleCard(moduleData, i)
+		card.Parent = parent
+		table.insert(self.ModuleButtons, card)
+		print("BuildingUI: Module card", i, "created and parented")
+	end
+	
+	print("BuildingUI: Loaded", #modules, "module cards for category:", categoryId)
+	
+	-- Force update the scroll canvas size
+	task.wait(0.1)
+	local listLayout = parent:FindFirstChildOfClass("UIListLayout")
+	if listLayout then
+		parent.CanvasSize = UDim2.new(0, listLayout.AbsoluteContentSize.X + 40, 0, 0)
+		print("BuildingUI: Updated module canvas size to:", listLayout.AbsoluteContentSize.X + 40)
+	end
+end
+
 function BuildingUI:SelectModule(moduleData, index)
-	self.SelectedModuleData = moduleData
+	print("BuildingUI: Selected module:", moduleData.name)
 
-	print("BuildingUI: Selected module: " .. moduleData.name)
-
-	-- Update all card visuals to show selection
+	-- Clear previous selection visuals
 	for i, card in ipairs(self.ModuleButtons) do
 		local stroke = card:FindFirstChildOfClass("UIStroke")
 		local selectBtn = card:FindFirstChild("TextButton")
 
-		if i == index then
-			-- Highlight selected
-			if stroke then
-				stroke.Color = UIHelpers.Colors.Success
-				stroke.Thickness = 3
-			end
-			if selectBtn then
-				selectBtn.BackgroundColor3 = UIHelpers.Colors.Success
-				selectBtn.Text = "SELECTED"
-			end
-		else
-			-- Reset others
-			if stroke then
-				stroke.Color = Color3.fromRGB(60, 80, 120)
-				stroke.Thickness = 2
-			end
-			if selectBtn then
-				selectBtn.BackgroundColor3 = UIHelpers.Colors.Accent
-				selectBtn.Text = "SELECT"
-			end
+		if stroke then
+			stroke.Color = Color3.fromRGB(60, 80, 120)
+			stroke.Thickness = 2
+		end
+		if selectBtn then
+			selectBtn.BackgroundColor3 = UIHelpers.Colors.Accent
+			selectBtn.Text = "SELECT"
 		end
 	end
 
-	-- IMMEDIATELY transition to placement mode UI
+	-- Highlight selected card
+	local selectedCard = self.ModuleButtons[index]
+	if selectedCard then
+		local stroke = selectedCard:FindFirstChildOfClass("UIStroke")
+		local selectBtn = selectedCard:FindFirstChild("TextButton")
+
+		if stroke then
+			stroke.Color = UIHelpers.Colors.Success
+			stroke.Thickness = 3
+		end
+		if selectBtn then
+			selectBtn.BackgroundColor3 = UIHelpers.Colors.Success
+			selectBtn.Text = "SELECTED"
+		end
+	end
+
+	-- Store selection
+	self.SelectedModuleData = moduleData
+
+	-- Transition to placement mode immediately
 	self:ShowPlacementMode(moduleData)
 
-	-- Tell BuildingSystem to enter placement mode  
+	-- Notify building system
 	if self.BuildingSystem then
 		self.BuildingSystem:SelectModule(moduleData.id, moduleData)
-	else
-		warn("BuildingUI: BuildingSystem not available!")
 	end
+
+	print("BuildingUI: Module selection completed")
 end
 
 function BuildingUI:AnimateCatalogDown()
@@ -478,9 +841,9 @@ function BuildingUI:AnimateCatalogDown()
 end
 
 function BuildingUI:AnimateCatalogUp()
-	-- Slide catalog back up
+	-- Slide catalog back up to its normal position (55% down screen to match the 45% height)
 	self.CatalogFrame:TweenPosition(
-		UDim2.new(0, 0, 0.72, 0),
+		UDim2.new(0, 0, 0.55, 0), -- Updated to match the new catalog position
 		Enum.EasingDirection.Out,
 		Enum.EasingStyle.Quad,
 		0.3,
@@ -789,15 +1152,13 @@ function BuildingUI:HideObjectHoverUI()
 end
 
 function BuildingUI:OnMoveObjectClicked(placedModule)
-	-- Find the module data for this placed module
+	-- Find the module data for this placed module using the new data manager
 	local moduleData = nil
-	for _, module in ipairs(MODULE_CATALOG) do
-		if placedModule.Name:find(module.id) then
-			moduleData = module
-			break
-		end
-	end
-
+	
+	-- Extract module ID from the placed module name
+	local moduleId = placedModule.Name:match("PreviewModel_(.+)") or placedModule.Name
+	moduleData = self.ModuleDataManager:GetModuleById(moduleId)
+	
 	if moduleData then
 		-- Remove the old module from placed modules
 		self.BuildingSystem:RemovePlacedModule(placedModule)
@@ -824,12 +1185,12 @@ function BuildingUI:ShowRequirementsUI()
 		self:CreateRequirementsUI()
 	end
 	
-	-- Get all placed modules from building system
-	local placedModules = self.BuildingSystem:GetPlacedModulesData()
-	local requirements = self:CheckRequirements(placedModules)
+	-- Get all placed modules from building system (use raw array, not processed data)
+	local placedModules = self.BuildingSystem.PlacedModules or {}
+	local requirements, missionContext = self:CheckRequirements(placedModules)
 	
-	-- Update UI with requirements
-	self:UpdateRequirementsDisplay(requirements)
+	-- Update UI with requirements and mission context
+	self:UpdateRequirementsDisplay(requirements, missionContext)
 	
 	-- Show the UI
 	if LocalPlayer.PlayerGui then
@@ -990,11 +1351,17 @@ end
 function BuildingUI:CheckRequirements(placedModules)
 	print("BuildingUI: Checking requirements for", #placedModules, "placed modules")
 	
+	-- Get mission data for dynamic requirements
+	local missionData = self.MissionDataManager:GetMissionData()
+	local crewSize = missionData.CrewSize or 4
+	local missionDuration = missionData.Duration or 30
+	local missionType = missionData.MissionType or "Earth Orbit"
+	
 	local requirements = {
 		-- Crew accommodation
 		{
 			name = "Crew Accommodation",
-			description = "Sufficient living space for all crew members",
+			description = string.format("Provide living space for %d crew members on a %d-day %s mission", crewSize, missionDuration, missionType),
 			required = true,
 			passed = false,
 			details = "",
@@ -1002,7 +1369,7 @@ function BuildingUI:CheckRequirements(placedModules)
 		-- Power balance
 		{
 			name = "Power Balance",
-			description = "Power generation meets or exceeds consumption",
+			description = "Power generation must exceed consumption with safety margin for emergencies",
 			required = true,
 			passed = false,
 			details = "",
@@ -1010,91 +1377,143 @@ function BuildingUI:CheckRequirements(placedModules)
 		-- Structural integrity
 		{
 			name = "Structural Connection",
-			description = "All modules properly connected to the station",
+			description = "All modules must be physically connected for crew mobility and safety",
 			required = true,
 			passed = false,
 			details = "",
 		},
 		-- Minimum modules
 		{
-			name = "Minimum Station Size",
-			description = "At least 3 modules required for a viable station",
+			name = "Station Complexity",
+			description = string.format("A %s mission requires diverse modules for different functions", missionType),
 			required = true,
 			passed = false,
 			details = "",
 		}
 	}
 
-	-- Get mission data for crew size
-	local missionData = self.MissionDataManager:GetCurrentMissionData()
-	local crewSize = missionData.CrewSize or 4
-
-	-- Check minimum modules
-	if #placedModules >= 3 then
-		requirements[4].passed = true
-		requirements[4].details = string.format("✓ %d modules placed (minimum: 3)", #placedModules)
-	else
-		requirements[4].details = string.format("✗ Only %d modules placed (minimum: 3)", #placedModules)
-	end
-
-	-- Calculate crew capacity and power
+	-- Calculate totals from placed modules
 	local totalCrewCapacity = 0
 	local totalPowerGeneration = 0
 	local totalPowerConsumption = 0
+	local totalVolume = 0
+	local moduleTypes = {}
 
 	for _, moduleData in ipairs(placedModules) do
-		-- Find module in catalog
-		for _, catalogModule in ipairs(MODULE_CATALOG) do
-			if moduleData.ModuleData.id == catalogModule.id then
-				-- Crew capacity
-				if catalogModule.capacity and catalogModule.capacity ~= "N/A" and catalogModule.capacity ~= "Transit" then
-					local capacity = tonumber(catalogModule.capacity:match("%d+")) or 0
-					totalCrewCapacity = totalCrewCapacity + capacity
+		-- Get module data using the new data manager
+		-- Handle case where ModuleData might be nil
+		if moduleData.ModuleData and moduleData.ModuleData.id then
+			local catalogModule = self.ModuleDataManager:GetModuleById(moduleData.ModuleData.id)
+			if catalogModule then
+				-- Crew capacity using new JSON structure
+				if catalogModule.crew and catalogModule.crew.capacity then
+					totalCrewCapacity = totalCrewCapacity + catalogModule.crew.capacity
 				end
 				
-				-- Power calculation
+				-- Power calculation using new JSON structure
 				if catalogModule.power then
-					if catalogModule.power > 0 then
-						totalPowerConsumption = totalPowerConsumption + catalogModule.power
-					else
-						totalPowerGeneration = totalPowerGeneration + math.abs(catalogModule.power)
-					end
+					totalPowerConsumption = totalPowerConsumption + (catalogModule.power.consumption or 0)
+					totalPowerGeneration = totalPowerGeneration + (catalogModule.power.generation or 0)
 				end
-				break
+				
+				-- Volume calculation
+				if catalogModule.dimensions then
+					totalVolume = totalVolume + (catalogModule.dimensions.volume or 0)
+				end
+				
+				-- Track module categories for diversity
+				local category = catalogModule.category
+				moduleTypes[category] = (moduleTypes[category] or 0) + 1
+			else
+				warn("BuildingUI: Could not find catalog module for ID:", moduleData.ModuleData.id)
 			end
+		else
+			warn("BuildingUI: PlacedModule missing ModuleData or ID:", moduleData)
 		end
 	end
 
-	-- Check crew accommodation
-	if totalCrewCapacity >= crewSize then
+	-- 1. Enhanced Crew Accommodation Check
+	local requiredVolume = crewSize * 12 * (missionDuration / 30) -- 12 cubic meters per crew per month
+	local hasAdequateSpace = totalCrewCapacity >= crewSize and totalVolume >= requiredVolume
+	
+	if hasAdequateSpace then
 		requirements[1].passed = true
-		requirements[1].details = string.format("✓ Capacity: %d crew (needed: %d)", totalCrewCapacity, crewSize)
+		requirements[1].details = string.format("✓ Crew: %d/%d capacity | Volume: %.0f/%.0f m³", 
+			totalCrewCapacity, crewSize, totalVolume, requiredVolume)
 	else
-		requirements[1].details = string.format("✗ Capacity: %d crew (needed: %d)", totalCrewCapacity, crewSize)
+		local missingCrew = math.max(0, crewSize - totalCrewCapacity)
+		local missingVolume = math.max(0, requiredVolume - totalVolume)
+		requirements[1].details = string.format("✗ Missing: %d crew capacity, %.0f m³ volume", 
+			missingCrew, missingVolume)
 	end
 
-	-- Check power balance
-	if totalPowerGeneration >= totalPowerConsumption then
+	-- 2. Enhanced Power Balance Check
+	local powerMargin = totalPowerGeneration - totalPowerConsumption
+	local requiredMargin = math.max(50, totalPowerConsumption * 0.15) -- 15% safety margin, minimum 50W
+	local hasAdequatePower = powerMargin >= requiredMargin
+	
+	if hasAdequatePower then
 		requirements[2].passed = true
-		requirements[2].details = string.format("✓ Generation: %dW, Consumption: %dW", totalPowerGeneration, totalPowerConsumption)
+		requirements[2].details = string.format("✓ Gen: %dW | Cons: %dW | Safety Margin: %dW (%.0f%%)", 
+			totalPowerGeneration, totalPowerConsumption, powerMargin, (powerMargin/math.max(1,totalPowerConsumption))*100)
 	else
-		requirements[2].details = string.format("✗ Generation: %dW, Consumption: %dW (deficit: %dW)", 
-			totalPowerGeneration, totalPowerConsumption, totalPowerConsumption - totalPowerGeneration)
+		local deficit = requiredMargin - powerMargin
+		requirements[2].details = string.format("✗ Need %dW more generation | Current: %dW gen, %dW cons", 
+			math.ceil(deficit), totalPowerGeneration, totalPowerConsumption)
 	end
 
-	-- Check structural connection (simplified - assume connected if >1 module)
+	-- 3. Structural Connection Check
 	if #placedModules >= 2 then
 		requirements[3].passed = true
-		requirements[3].details = "✓ All modules properly connected"
+		requirements[3].details = string.format("✓ %d modules connected in unified station", #placedModules)
+	elseif #placedModules == 1 then
+		requirements[3].details = "✗ Single module - need connections for crew mobility"
+		requirements[3].passed = false
 	else
-		requirements[3].details = "✓ Single module station (no connections needed)"
-		requirements[3].passed = true
+		requirements[3].details = "✗ No modules placed"
+		requirements[3].passed = false
 	end
 
-	return requirements
+	-- 4. Enhanced Station Complexity Check
+	local requiredModules = math.max(3, math.ceil(crewSize / 2)) -- Scale with crew size
+	local categoryCount = 0
+	for _ in pairs(moduleTypes) do
+		categoryCount = categoryCount + 1
+	end
+	
+	-- Mission-specific requirements
+	local requiredCategories = 2
+	if missionType == "Deep Space" then
+		requiredCategories = 4 -- Need more diversity for long missions
+	elseif missionType == "Lunar Base" then
+		requiredCategories = 3 -- Moderate diversity needed
+	end
+	
+	local hasComplexity = #placedModules >= requiredModules and categoryCount >= requiredCategories
+	
+	if hasComplexity then
+		requirements[4].passed = true
+		requirements[4].details = string.format("✓ %d modules (%d needed) | %d categories (%d needed)", 
+			#placedModules, requiredModules, categoryCount, requiredCategories)
+	else
+		requirements[4].details = string.format("✗ Need %d more modules, %d more categories", 
+			math.max(0, requiredModules - #placedModules), math.max(0, requiredCategories - categoryCount))
+	end
+
+	-- Add mission context for educational value
+	local missionContext = {
+		crew = crewSize,
+		duration = missionDuration,
+		missionType = missionType,
+		totalModules = #placedModules,
+		totalPower = {generation = totalPowerGeneration, consumption = totalPowerConsumption},
+		totalVolume = totalVolume
+	}
+
+	return requirements, missionContext
 end
 
-function BuildingUI:UpdateRequirementsDisplay(requirements)
+function BuildingUI:UpdateRequirementsDisplay(requirements, missionContext)
 	local contentFrame = self.RequirementsUI.ContentFrame
 	
 	-- Clear existing content

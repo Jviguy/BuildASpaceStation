@@ -2,7 +2,7 @@ local ModuleDataManager = {}
 ModuleDataManager.__index = ModuleDataManager
 
 -- Services
-local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 function ModuleDataManager.new()
 	local self = setmetatable({}, ModuleDataManager)
@@ -38,10 +38,9 @@ function ModuleDataManager:LoadModuleData()
 	
 	-- Create a promise-like structure
 	self.LoadingPromise = task.spawn(function()
-		-- Load category definitions
+		-- Load category definitions (Rojo converts JSON to ModuleScript that returns a table)
 		local categorySuccess, categoryData = pcall(function()
-			local categoryJson = require(script.Parent.Parent.Parent.shared.data.module_categories)
-			return categoryJson
+			return require(ReplicatedStorage.Shared.data.module_categories)
 		end)
 		
 		if categorySuccess then
@@ -51,12 +50,17 @@ function ModuleDataManager:LoadModuleData()
 			warn("ModuleDataManager: Failed to load category data:", categoryData)
 		end
 		
-		-- Load modules from each category
+		-- Load modules from each category (Rojo converts JSON files to ModuleScripts that return tables)
 		local categories = {"habitat", "power", "science", "operations", "storage"}
 		
 		for _, categoryName in ipairs(categories) do
 			local success, moduleData = pcall(function()
-				return require(script.Parent.Parent.Parent.shared.data.modules[categoryName])
+				local modulePath = ReplicatedStorage.Shared.data.modules:FindFirstChild(categoryName)
+				if modulePath then
+					return require(modulePath)
+				else
+					error("Module not found: " .. categoryName)
+				end
 			end)
 			
 			if success then
