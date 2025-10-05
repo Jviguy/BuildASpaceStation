@@ -37,6 +37,17 @@ local COLORS = {
     STARTING_PLATFORM = Color3.fromRGB(80, 200, 120)
 }
 
+-- Helper function for sign
+local function sign(x)
+    if x > 0 then
+        return 1
+    elseif x < 0 then
+        return -1
+    else
+        return 0
+    end
+end
+
 function BuildingSystem.new(cameraController, uiManager)
     local self = setmetatable({}, BuildingSystem)
     
@@ -469,7 +480,7 @@ function BuildingSystem:UpdatePreview()
     
     -- Update ghost pulse effect
     self.GhostPulseTime = self.GhostPulseTime + (1/60) * self.PulseSpeed
-    local pulseAlpha = (math.sin(self.GhostPulseTime) + 1) / 2 -- Oscillates between 0 and 1
+    local pulseAlpha = (math.sin(self.GhostPulseTime) + 1) / 2
     
     -- If placement is locked, just update visual effects and return
     if self.PlacementLocked and self.LockedPosition then
@@ -477,95 +488,267 @@ function BuildingSystem:UpdatePreview()
             CFrame.new(self.LockedPosition) * CFrame.Angles(0, math.rad(self.CurrentRotation), 0)
         )
         
-        -- Check for collisions even when locked
         local isColliding = self:CheckCollision()
         if isColliding then
             self:SetPreviewColor(COLORS.INVALID, pulseAlpha)
         else
-            -- Use cyan to show it's locked and ready
             self:SetPreviewColor(COLORS.SNAPPING, pulseAlpha)
         end
         return
     end
     
-    -- Get mouse position in 3D space
+    -- Determine correct Y level
+    local correctY
+    if #self.PlacedModules == 0 then
+        correctY = STARTING_PLATFORM.Position.Y + 8
+    else
+        correctY = self.PlacedModules[#self.PlacedModules].Position.Y
+    end
+    
+    -- Get mouse hit position at the correct Y plane
     local mouse = LocalPlayer:GetMouse()
-    local mouseRay = workspace.CurrentCamera:ScreenPointToRay(mouse.X, mouse.Y)
+    local camera = workspace.CurrentCamera
+    local mouseRay = camera:ScreenPointToRay(mouse.X, mouse.Y)
     
-    -- Raycast to find placement position
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterDescendantsInstances = {self.PreviewModel, LocalPlayer.Character}
-    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    -- Calculate where ray intersects with the Y plane
+    local rayOrigin = mouseRay.Origin
+    local rayDirection = mouseRay.Direction
     
-    local rayResult = workspace:Raycast(mouseRay.Origin, mouseRay.Direction * 1000, raycastParams)
+    -- Ray equation: P = Origin + t * Direction
+    -- We want P.Y = correctY, so: correctY = Origin.Y + t * Direction.Y
+    -- Solve for t: t = (correctY - Origin.Y) / Direction.Y
     
-    if rayResult then
-        local hitPosition = rayResult.Position
+    local t = (correctY - rayOrigin.Y) / rayDirection.Y
+    local hitPosition = rayOrigin + (rayDirection * t)
+    hitPosition = Vector3.new(hitPosition.X, correctY, hitPosition.Z)
+    
+    -- Find all valid snap positions
+    local validSnapPositions = self:FindAllValidSnapPositions(correctY)
+    
+    if #validSnapPositions > 0 then
+        -- Find the nearest valid snap position
+        local nearestSnap = validSnapPositions[1]
+        local nearestDistance = (nearestSnap.position - hitPosition).Magnitude
         
-        -- Check for nearby ports to snap to
-        local nearestPort, portPosition = self:FindNearestPort(hitPosition)
+        for _, snap in ipairs(validSnapPositions) do
+            local distance = (snap.position - hitPosition).Magnitude
+            if distance < nearestDistance then
+                nearestDistance = distance
+                nearestSnap = snap
+            end
+        end
         
-        if nearestPort then
-            -- Snap to port
-            self.NearestPort = nearestPort
-            self.SnapIndicator.Position = portPosition
-            self.SnapIndicator.Transparency = 0.3 -- Show indicator
-            
-            -- Enable highlight
-            local highlight = self.SnapIndicator:FindFirstChildOfClass("Highlight")
-            if highlight then
-                highlight.Enabled = true
-            end
-            
-            -- Position preview at port
-            self.PreviewModel:SetPrimaryPartCFrame(
-                CFrame.new(portPosition) * CFrame.Angles(0, math.rad(self.CurrentRotation), 0)
-            )
-            
-            -- Check for collisions
-            local isColliding = self:CheckCollision()
-            
-            -- Make preview cyan when snapping, red if colliding
-            if isColliding then
-                self:SetPreviewColor(COLORS.INVALID, pulseAlpha)
-            else
-                self:SetPreviewColor(COLORS.SNAPPING, pulseAlpha)
-            end
+        -- Position preview at the snap location
+        self.PreviewModel:SetPrimaryPartCFrame(
+            CFrame.new(nearestSnap.position) * CFrame.Angles(0, math.rad(self.CurrentRotation), 0)
+        )
+        
+        -- Show snap indicator
+        self.SnapIndicator.Position = nearestSnap.portPosition
+        self.SnapIndicator.Transparency = 0.3
+        local highlight = self.SnapIndicator:FindFirstChildOfClass("Highlight")
+        if highlight then
+            highlight.Enabled = true
+        end
+        
+        -- Check for collisions
+        local isColliding = self:CheckCollision()
+        if isColliding then
+            self:SetPreviewColor(COLORS.INVALID, pulseAlpha)
         else
-            -- Grid snapping (for first module or free placement)
-            self.SnapIndicator.Transparency = 1 -- Hide indicator
-            
-            -- Disable highlight
-            local highlight = self.SnapIndicator:FindFirstChildOfClass("Highlight")
-            if highlight then
-                highlight.Enabled = false
-            end
-            
-            self.NearestPort = nil
-            
+            self:SetPreviewColor(COLORS.SNAPPING, pulseAlpha)
+        end
+    else
+        -- No valid snaps - use grid snapping for first module only
+        self.SnapIndicator.Transparency = 1
+        local highlight = self.SnapIndicator:FindFirstChildOfClass("Highlight")
+        if highlight then
+            highlight.Enabled = false
+        end
+        
+        if #self.PlacedModules == 0 then
+            -- First module can be placed anywhere on grid
             local snappedPosition = self:SnapToGrid(hitPosition)
-            
-            -- Check if position is within building zone
-            if self:IsWithinBuildingZone(snappedPosition) then
-                self.PreviewModel:SetPrimaryPartCFrame(
-                    CFrame.new(snappedPosition) * CFrame.Angles(0, math.rad(self.CurrentRotation), 0)
-                )
-                
-                -- Check for collisions
-                local isColliding = self:CheckCollision()
-                
-                -- Make preview green (valid) or red (colliding)
-                if isColliding then
-                    self:SetPreviewColor(COLORS.INVALID, pulseAlpha)
-                else
-                    self:SetPreviewColor(COLORS.VALID, pulseAlpha)
-                end
-            else
-                -- Make preview red (outside zone)
-                self:SetPreviewColor(COLORS.INVALID, pulseAlpha)
+            self.PreviewModel:SetPrimaryPartCFrame(
+                CFrame.new(snappedPosition) * CFrame.Angles(0, math.rad(self.CurrentRotation), 0)
+            )
+            self:SetPreviewColor(COLORS.VALID, pulseAlpha)
+        else
+            -- After first module, MUST snap to existing modules
+            -- Show preview in red at mouse position to indicate invalid
+            local snappedPosition = self:SnapToGrid(hitPosition)
+            self.PreviewModel:SetPrimaryPartCFrame(
+                CFrame.new(snappedPosition) * CFrame.Angles(0, math.rad(self.CurrentRotation), 0)
+            )
+            self:SetPreviewColor(COLORS.INVALID, pulseAlpha)
+        end
+    end
+end
+
+function BuildingSystem:FindAllValidSnapPositions(correctY)
+    -- Find all valid snap positions where the preview can connect to placed modules
+    -- Returns array of {position: Vector3, portPosition: Vector3, targetPort: Attachment, previewPort: Attachment}
+    
+    local validSnaps = {}
+    
+    if #self.PlacedModules == 0 then
+        return validSnaps -- No placed modules yet
+    end
+    
+    -- Get all ports on the preview module
+    local previewPorts = {}
+    if self.PreviewModel and self.PreviewModel.PrimaryPart then
+        for _, attachment in ipairs(self.PreviewModel.PrimaryPart:GetChildren()) do
+            if attachment:IsA("Attachment") and attachment.Name:match("Port") then
+                table.insert(previewPorts, attachment)
             end
         end
     end
+    
+    -- For each placed module
+    for _, placedModule in ipairs(self.PlacedModules) do
+        if placedModule.Model and placedModule.Model.PrimaryPart then
+            local targetPart = placedModule.Model.PrimaryPart
+            
+            -- For each port on the placed module
+            for _, targetPort in ipairs(targetPart:GetChildren()) do
+                if targetPort:IsA("Attachment") and targetPort.Name:match("Port") then
+                    
+                    -- For each port on the preview module
+                    for _, previewPort in ipairs(previewPorts) do
+                        
+                        -- Calculate where the preview would need to be to connect these ports
+                        local snapPosition = self:CalculateSnapPosition(
+                            targetPort, 
+                            targetPart,
+                            previewPort,
+                            placedModule.Model.PrimaryPart.Size,
+                            correctY
+                        )
+                        
+                        if snapPosition then
+                            -- Test if this position would cause a collision
+                            -- Temporarily position preview at snap location to test
+                            local oldCFrame = self.PreviewModel.PrimaryPart.CFrame
+                            self.PreviewModel:SetPrimaryPartCFrame(
+                                CFrame.new(snapPosition) * CFrame.Angles(0, math.rad(self.CurrentRotation), 0)
+                            )
+                            
+                            local wouldCollide = self:CheckCollision()
+                            
+                            -- Restore old position
+                            self.PreviewModel:SetPrimaryPartCFrame(oldCFrame)
+                            
+                            -- Only add if no collision
+                            if not wouldCollide then
+                                table.insert(validSnaps, {
+                                    position = snapPosition,
+                                    portPosition = Vector3.new(targetPort.WorldPosition.X, correctY, targetPort.WorldPosition.Z),
+                                    targetPort = targetPort,
+                                    previewPort = previewPort
+                                })
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    
+    return validSnaps
+end
+
+function BuildingSystem:CalculateSnapPosition(targetPort, targetPart, previewPort, _targetSize, correctY)
+    -- Calculate where to position the preview module so its port connects to target port
+    -- Returns nil if connection is invalid (ports facing same direction)
+    
+    if not self.PreviewModel or not self.PreviewModel.PrimaryPart then
+        return nil
+    end
+    
+    -- Get port LOCAL positions (relative to part center)
+    local targetPortLocal = targetPort.Position
+    local previewPortLocal = previewPort.Position
+    
+    -- Get port directions in LOCAL space
+    local targetPortDirLocal = self:GetPortDirectionFromLocal(targetPortLocal, targetPart)
+    local previewPortDirLocal = self:GetPortDirectionFromLocal(previewPortLocal, self.PreviewModel.PrimaryPart)
+    
+    -- Apply rotation to preview port direction
+    local rotationCFrame = CFrame.Angles(0, math.rad(self.CurrentRotation), 0)
+    local previewPortDirRotated = rotationCFrame:VectorToWorldSpace(previewPortDirLocal)
+    
+    -- Transform target port direction to world space
+    local targetPortDirWorld = targetPart.CFrame:VectorToWorldSpace(targetPortDirLocal)
+    
+    -- Check if ports are facing EXACTLY opposite directions (straight connection only)
+    -- Dot product should be very close to -1.0 for valid straight connection
+    -- -1.0 = exactly opposite (180°) - VALID
+    -- 0.0 = perpendicular (90°) - INVALID (would need connector piece)
+    -- 1.0 = same direction (0°) - INVALID
+    local dotProduct = targetPortDirWorld:Dot(previewPortDirRotated)
+    if dotProduct > -0.95 then
+        -- Not a straight connection - would need a connector piece for 90° turns
+        return nil
+    end
+    
+    -- Additional check: Ensure ports are on the same axis type
+    -- Vertical ports (Y-axis) should only connect to vertical ports
+    -- Horizontal ports (X or Z axis) should only connect to horizontal ports
+    local targetAbsDir = Vector3.new(math.abs(targetPortDirWorld.X), math.abs(targetPortDirWorld.Y), math.abs(targetPortDirWorld.Z))
+    local previewAbsDir = Vector3.new(math.abs(previewPortDirRotated.X), math.abs(previewPortDirRotated.Y), math.abs(previewPortDirRotated.Z))
+    
+    local targetIsVertical = targetAbsDir.Y > 0.9  -- Y-axis dominant
+    local previewIsVertical = previewAbsDir.Y > 0.9  -- Y-axis dominant
+    
+    if targetIsVertical ~= previewIsVertical then
+        -- One is vertical, one is horizontal - not a valid connection
+        -- This prevents vertical modules snapping to horizontal sides
+        return nil
+    end
+    
+    -- CORRECT APPROACH: Position preview so ports touch
+    -- Get target port position in world space
+    local targetPortWorldPos = targetPort.WorldPosition
+    
+    -- Small gap between ports (so they touch but don't overlap)
+    local connectionGap = 0.5
+    
+    -- Calculate where the preview port should be in world space
+    -- It should be offset from target port along the connection direction
+    local previewPortTargetWorldPos = targetPortWorldPos + (targetPortDirWorld * connectionGap)
+    
+    -- Get preview port offset from module center (after applying rotation)
+    local previewPortOffsetRotated = rotationCFrame:VectorToWorldSpace(previewPortLocal)
+    
+    -- Calculate preview module center position
+    -- Preview Center + Preview Port Offset = Preview Port Target Position
+    -- Therefore: Preview Center = Preview Port Target Position - Preview Port Offset
+    local previewCenter = previewPortTargetWorldPos - previewPortOffsetRotated
+    
+    -- Force correct Y level
+    previewCenter = Vector3.new(previewCenter.X, correctY, previewCenter.Z)
+    
+    return previewCenter
+end
+
+function BuildingSystem:GetPortDirectionFromLocal(portLocalPos, part)
+    -- Determine port direction from its local position
+    local absX = math.abs(portLocalPos.X)
+    local absY = math.abs(portLocalPos.Y)
+    local absZ = math.abs(portLocalPos.Z)
+    
+    local direction
+    if absX > absY and absX > absZ then
+        direction = Vector3.new(sign(portLocalPos.X), 0, 0)
+    elseif absY > absX and absY > absZ then
+        direction = Vector3.new(0, sign(portLocalPos.Y), 0)
+    else
+        direction = Vector3.new(0, 0, sign(portLocalPos.Z))
+    end
+    
+    -- Transform to world space
+    return part.CFrame:VectorToWorldSpace(direction).Unit
 end
 
 function BuildingSystem:FindNearestPort(position)
@@ -595,6 +778,66 @@ function BuildingSystem:FindNearestPort(position)
     return nearestPort, nearestPosition
 end
 
+function BuildingSystem:FindClosestPreviewPort(targetPortPosition)
+    -- Find which port on the preview module is closest to the target port
+    -- This determines which port should connect
+    if not self.PreviewModel or not self.PreviewModel.PrimaryPart then
+        return nil
+    end
+    
+    local closestPort = nil
+    local closestDistance = math.huge
+    
+    for _, attachment in ipairs(self.PreviewModel.PrimaryPart:GetChildren()) do
+        if attachment:IsA("Attachment") and attachment.Name:match("Port") then
+            -- Get the world position of this port
+            local portWorldPos = attachment.WorldPosition
+            local distance = (portWorldPos - targetPortPosition).Magnitude
+            
+            if distance < closestDistance then
+                closestDistance = distance
+                closestPort = attachment
+            end
+        end
+    end
+    
+    return closestPort
+end
+
+function BuildingSystem:GetPortDirection(portAttachment)
+    -- Determine which direction a port is facing based on its local position
+    -- Ports are positioned on the edges of modules, so we can determine direction
+    -- from their relative position to the module center
+    
+    if not portAttachment or not portAttachment.Parent then
+        return Vector3.new(0, 0, 1) -- Default forward
+    end
+    
+    local portPos = portAttachment.Position -- Local position relative to PrimaryPart
+    local primaryPart = portAttachment.Parent
+    
+    -- Determine the dominant axis (which side of the module this port is on)
+    local absX = math.abs(portPos.X)
+    local absY = math.abs(portPos.Y)
+    local absZ = math.abs(portPos.Z)
+    
+    local direction
+    if absX > absY and absX > absZ then
+        -- Port is on X axis (left or right side)
+        direction = Vector3.new(sign(portPos.X), 0, 0)
+    elseif absY > absX and absY > absZ then
+        -- Port is on Y axis (top or bottom)
+        direction = Vector3.new(0, sign(portPos.Y), 0)
+    else
+        -- Port is on Z axis (front or back)
+        direction = Vector3.new(0, 0, sign(portPos.Z))
+    end
+    
+    -- Transform to world space using the part's CFrame
+    local worldDirection = primaryPart.CFrame:VectorToWorldSpace(direction)
+    return worldDirection.Unit
+end
+
 function BuildingSystem:SnapToGrid(position)
     -- Snap position to grid
     local gridSize = BUILDING_ZONE.GridSize
@@ -618,7 +861,7 @@ end
 function BuildingSystem:CheckCollision()
     if not self.PreviewModel or not self.PreviewModel.PrimaryPart then return false end
     
-    -- Get all parts in preview model
+    -- Get all parts in preview model (exclude port indicators)
     local previewParts = {}
     for _, part in ipairs(self.PreviewModel:GetDescendants()) do
         if part:IsA("BasePart") and not part.Name:find("Port_") then
@@ -626,18 +869,27 @@ function BuildingSystem:CheckCollision()
         end
     end
     
-    -- Check for overlap with placed modules
+    -- Check for overlap with placed modules using AABB collision
     for _, placedModule in ipairs(self.PlacedModules) do
         if placedModule.Model and placedModule.Model.PrimaryPart then
             for _, placedPart in ipairs(placedModule.Model:GetDescendants()) do
                 if placedPart:IsA("BasePart") and not placedPart.Name:find("Port_") then
                     -- Check for overlap with each preview part
                     for _, previewPart in ipairs(previewParts) do
-                        local distance = (previewPart.Position - placedPart.Position).Magnitude
-                        local combinedSize = (previewPart.Size.Magnitude + placedPart.Size.Magnitude) / 2
+                        -- Use AABB (Axis-Aligned Bounding Box) collision detection
+                        -- More accurate for rectangular modules
+                        local previewPos = previewPart.Position
+                        local previewSize = previewPart.Size
+                        local placedPos = placedPart.Position
+                        local placedSize = placedPart.Size
                         
-                        if distance < combinedSize * 0.7 then -- 70% overlap threshold
-                            return true
+                        -- Check if bounding boxes overlap on all three axes
+                        local overlapX = math.abs(previewPos.X - placedPos.X) < (previewSize.X + placedSize.X) / 2
+                        local overlapY = math.abs(previewPos.Y - placedPos.Y) < (previewSize.Y + placedSize.Y) / 2
+                        local overlapZ = math.abs(previewPos.Z - placedPos.Z) < (previewSize.Z + placedSize.Z) / 2
+                        
+                        if overlapX and overlapY and overlapZ then
+                            return true -- Collision detected
                         end
                     end
                 end
