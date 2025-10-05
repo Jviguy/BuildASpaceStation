@@ -1,0 +1,45 @@
+{
+  "categories": {
+    "habitat": {
+      "name": "Habitat Modules",
+      "description": "Living quarters and crew facilities",
+      "icon": "🏠",
+      "color": "#4CAF50",
+      "order": 1
+    },
+    "power": {
+      "name": "Power Systems",
+      "description": "Energy generation and storage",
+      "icon": "⚡",
+      "color": "#FF9800",
+      "order": 2
+    },
+    "science": {
+      "name": "Science & Research",
+      "description": "Laboratories and research facilities",
+      "icon": "🔬",
+      "color": "#2196F3",
+      "order": 3
+    },
+    "operations": {
+      "name": "Operations",
+      "description": "Command, control, and docking systems",
+      "icon": "🎛️",
+      "color": "#9C27B0",
+      "order": 4
+    },
+    "storage": {
+      "name": "Storage & Logistics",
+      "description": "Cargo, fuel, and resource storage",
+      "icon": "📦",
+      "color": "#607D8B",
+      "order": 5
+    }
+  },
+  "ui_settings": {
+    "cards_per_row": 3,
+    "card_spacing": 10,
+    "category_transition_time": 0.3,
+    "back_button_text": "← Back to Categories"
+  }
+}

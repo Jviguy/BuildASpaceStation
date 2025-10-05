@@ -1,0 +1,161 @@
+[
+  {
+    "id": "storage_cargo_basic",
+    "name": "Cargo Storage Bay",
+    "category": "storage",
+    "description": "General purpose storage for supplies and equipment.",
+    "icon": "📦",
+    "model": "StorageBay",
+    "dimensions": {
+      "width": 6,
+      "height": 4,
+      "depth": 8,
+      "volume": 192
+    },
+    "mass": {
+      "dry": 1800,
+      "max": 4800
+    },
+    "power": {
+      "consumption": 50,
+      "generation": 0
+    },
+    "crew": {
+      "capacity": 0,
+      "comfort": 0
+    },
+    "life_support": {
+      "air_recycling": 0,
+      "water_recycling": 0
+    },
+    "cost": 5000,
+    "unlock_requirements": [],
+    "special_properties": {
+      "cargo_capacity": 3000,
+      "automated_retrieval": false,
+      "climate_controlled": false
+    },
+    "ports": [
+      {
+        "name": "access",
+        "position": [0, 0, -4],
+        "direction": [0, 0, -1],
+        "type": "standard"
+      }
+    ]
+  },
+  {
+    "id": "storage_fuel_tank",
+    "name": "Fuel Storage Tank",
+    "category": "storage",
+    "description": "Pressurized tank for fuel storage and distribution.",
+    "icon": "⛽",
+    "model": "FuelTank",
+    "dimensions": {
+      "width": 4,
+      "height": 6,
+      "depth": 4,
+      "volume": 96
+    },
+    "mass": {
+      "dry": 1200,
+      "max": 6200
+    },
+    "power": {
+      "consumption": 25,
+      "generation": 0
+    },
+    "crew": {
+      "capacity": 0,
+      "comfort": 0
+    },
+    "life_support": {
+      "air_recycling": 0,
+      "water_recycling": 0
+    },
+    "cost": 8000,
+    "unlock_requirements": [],
+    "special_properties": {
+      "fuel_capacity": 5000,
+      "fuel_type": "liquid_hydrogen",
+      "pressure_rating": 350
+    },
+    "ports": [
+      {
+        "name": "fuel_in",
+        "position": [0, 3, 0],
+        "direction": [0, 1, 0],
+        "type": "fuel"
+      },
+      {
+        "name": "fuel_out",
+        "position": [0, -3, 0],
+        "direction": [0, -1, 0],
+        "type": "fuel"
+      },
+      {
+        "name": "access",
+        "position": [2, 0, 0],
+        "direction": [1, 0, 0],
+        "type": "standard"
+      }
+    ]
+  },
+  {
+    "id": "storage_water_recycle",
+    "name": "Water Processing Unit",
+    "category": "storage",
+    "description": "Advanced water recycling and purification system.",
+    "icon": "💧",
+    "model": "WaterProcessor",
+    "dimensions": {
+      "width": 6,
+      "height": 4,
+      "depth": 6,
+      "volume": 144
+    },
+    "mass": {
+      "dry": 2800,
+      "max": 4300
+    },
+    "power": {
+      "consumption": 300,
+      "generation": 0
+    },
+    "crew": {
+      "capacity": 0,
+      "comfort": 0
+    },
+    "life_support": {
+      "air_recycling": 0,
+      "water_recycling": 2.0
+    },
+    "cost": 12000,
+    "unlock_requirements": [],
+    "special_properties": {
+      "water_capacity": 1500,
+      "purification_rate": 100,
+      "recycling_efficiency": 0.95
+    },
+    "ports": [
+      {
+        "name": "water_in",
+        "position": [-3, 0, 0],
+        "direction": [-1, 0, 0],
+        "type": "water"
+      },
+      {
+        "name": "water_out",
+        "position": [3, 0, 0],
+        "direction": [1, 0, 0],
+        "type": "water"
+      },
+      {
+        "name": "access",
+        "position": [0, 0, -3],
+        "direction": [0, 0, -1],
+        "type": "standard"
+      }
+    ]
+  }
+]

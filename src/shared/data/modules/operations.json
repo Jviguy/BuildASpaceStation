@@ -1,0 +1,173 @@
+[
+  {
+    "id": "ops_command_center",
+    "name": "Command Module",
+    "category": "operations",
+    "description": "Central command and control facility for station operations.",
+    "icon": "🎛️",
+    "model": "CommandCenter",
+    "dimensions": {
+      "width": 8,
+      "height": 4,
+      "depth": 8,
+      "volume": 256
+    },
+    "mass": {
+      "dry": 4200,
+      "max": 4800
+    },
+    "power": {
+      "consumption": 500,
+      "generation": 0
+    },
+    "crew": {
+      "capacity": 4,
+      "comfort": 0.8
+    },
+    "life_support": {
+      "air_recycling": 0.4,
+      "water_recycling": 0.3
+    },
+    "cost": 20000,
+    "unlock_requirements": [],
+    "special_properties": {
+      "command_range": 500,
+      "communication_power": 1000,
+      "control_systems": 12
+    },
+    "ports": [
+      {
+        "name": "forward",
+        "position": [0, 0, 4],
+        "direction": [0, 0, 1],
+        "type": "standard"
+      },
+      {
+        "name": "aft",
+        "position": [0, 0, -4],
+        "direction": [0, 0, -1],
+        "type": "standard"
+      },
+      {
+        "name": "port",
+        "position": [-4, 0, 0],
+        "direction": [-1, 0, 0],
+        "type": "standard"
+      },
+      {
+        "name": "starboard",
+        "position": [4, 0, 0],
+        "direction": [1, 0, 0],
+        "type": "standard"
+      }
+    ]
+  },
+  {
+    "id": "ops_docking_bay",
+    "name": "Docking Bay",
+    "category": "operations",
+    "description": "Large docking facility for spacecraft and cargo vessels.",
+    "icon": "🚀",
+    "model": "DockingBay",
+    "dimensions": {
+      "width": 12,
+      "height": 6,
+      "depth": 10,
+      "volume": 720
+    },
+    "mass": {
+      "dry": 6500,
+      "max": 8000
+    },
+    "power": {
+      "consumption": 200,
+      "generation": 0
+    },
+    "crew": {
+      "capacity": 2,
+      "comfort": 0.4
+    },
+    "life_support": {
+      "air_recycling": 0.1,
+      "water_recycling": 0.1
+    },
+    "cost": 25000,
+    "unlock_requirements": [],
+    "special_properties": {
+      "docking_arms": 4,
+      "cargo_capacity": 5000,
+      "pressurization_time": 300
+    },
+    "ports": [
+      {
+        "name": "station_connection",
+        "position": [0, 0, -5],
+        "direction": [0, 0, -1],
+        "type": "standard"
+      },
+      {
+        "name": "docking_port_1",
+        "position": [0, 0, 5],
+        "direction": [0, 0, 1],
+        "type": "docking"
+      },
+      {
+        "name": "docking_port_2",
+        "position": [6, 0, 0],
+        "direction": [1, 0, 0],
+        "type": "docking"
+      }
+    ]
+  },
+  {
+    "id": "ops_airlock",
+    "name": "EVA Airlock",
+    "category": "operations",
+    "description": "Pressurized chamber for extravehicular activities and maintenance.",
+    "icon": "🚪",
+    "model": "Airlock",
+    "dimensions": {
+      "width": 4,
+      "height": 4,
+      "depth": 6,
+      "volume": 96
+    },
+    "mass": {
+      "dry": 2200,
+      "max": 2500
+    },
+    "power": {
+      "consumption": 100,
+      "generation": 0
+    },
+    "crew": {
+      "capacity": 2,
+      "comfort": 0.2
+    },
+    "life_support": {
+      "air_recycling": 0,
+      "water_recycling": 0
+    },
+    "cost": 8000,
+    "unlock_requirements": [],
+    "special_properties": {
+      "cycle_time": 600,
+      "suit_storage": 4,
+      "emergency_backup": true
+    },
+    "ports": [
+      {
+        "name": "inner_hatch",
+        "position": [0, 0, -3],
+        "direction": [0, 0, -1],
+        "type": "standard"
+      },
+      {
+        "name": "outer_hatch",
+        "position": [0, 0, 3],
+        "direction": [0, 0, 1],
+        "type": "external"
+      }
+    ]
+  }
+]

@@ -1,0 +1,146 @@
+[
+  {
+    "id": "hab_basic_quarters",
+    "name": "Basic Crew Quarters",
+    "category": "habitat",
+    "description": "Standard crew living quarters with basic amenities for 2 crew members.",
+    "icon": "🏠",
+    "model": "HabitatModuleA",
+    "dimensions": {
+      "width": 4,
+      "height": 3,
+      "depth": 6,
+      "volume": 72
+    },
+    "mass": {
+      "dry": 2500,
+      "max": 3000
+    },
+    "power": {
+      "consumption": 150,
+      "generation": 0
+    },
+    "crew": {
+      "capacity": 2,
+      "comfort": 0.7
+    },
+    "life_support": {
+      "air_recycling": 0.8,
+      "water_recycling": 0.6
+    },
+    "cost": 8500,
+    "unlock_requirements": [],
+    "ports": [
+      {
+        "name": "forward",
+        "position": [0, 0, 3],
+        "direction": [0, 0, 1],
+        "type": "standard"
+      },
+      {
+        "name": "aft",
+        "position": [0, 0, -3],
+        "direction": [0, 0, -1],
+        "type": "standard"
+      }
+    ]
+  },
+  {
+    "id": "hab_luxury_suite",
+    "name": "Executive Suite",
+    "category": "habitat",
+    "description": "Premium living quarters with enhanced amenities for 1 crew member.",
+    "icon": "🏨",
+    "model": "HabitatSuite",
+    "dimensions": {
+      "width": 6,
+      "height": 4,
+      "depth": 8,
+      "volume": 192
+    },
+    "mass": {
+      "dry": 3200,
+      "max": 3800
+    },
+    "power": {
+      "consumption": 250,
+      "generation": 0
+    },
+    "crew": {
+      "capacity": 1,
+      "comfort": 0.95
+    },
+    "life_support": {
+      "air_recycling": 0.9,
+      "water_recycling": 0.8
+    },
+    "cost": 15000,
+    "unlock_requirements": ["hab_basic_quarters"],
+    "ports": [
+      {
+        "name": "forward",
+        "position": [0, 0, 4],
+        "direction": [0, 0, 1],
+        "type": "standard"
+      },
+      {
+        "name": "aft",
+        "position": [0, 0, -4],
+        "direction": [0, 0, -1],
+        "type": "standard"
+      },
+      {
+        "name": "port",
+        "position": [-3, 0, 0],
+        "direction": [-1, 0, 0],
+        "type": "standard"
+      }
+    ]
+  },
+  {
+    "id": "hab_dormitory",
+    "name": "Crew Dormitory",
+    "category": "habitat",
+    "description": "High-density sleeping quarters for 6 crew members.",
+    "icon": "🛏️",
+    "model": "HabitatDorm",
+    "dimensions": {
+      "width": 8,
+      "height": 3,
+      "depth": 6,
+      "volume": 144
+    },
+    "mass": {
+      "dry": 3800,
+      "max": 4500
+    },
+    "power": {
+      "consumption": 300,
+      "generation": 0
+    },
+    "crew": {
+      "capacity": 6,
+      "comfort": 0.5
+    },
+    "life_support": {
+      "air_recycling": 0.7,
+      "water_recycling": 0.5
+    },
+    "cost": 12000,
+    "unlock_requirements": [],
+    "ports": [
+      {
+        "name": "forward",
+        "position": [0, 0, 3],
+        "direction": [0, 0, 1],
+        "type": "standard"
+      },
+      {
+        "name": "aft",
+        "position": [0, 0, -3],
+        "direction": [0, 0, -1],
+        "type": "standard"
+      }
+    ]
+  }
+]

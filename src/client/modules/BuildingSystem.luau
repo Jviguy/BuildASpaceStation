@@ -20,7 +20,7 @@ local BUILDING_ZONE = {
 }
 
 -- Port snapping configuration
-local PORT_SNAP_DISTANCE = 8 -- Maximum distance to snap to a port
+local PORT_SNAP_DISTANCE = 12 -- Increased from 8 for easier snapping
 
 -- Visual feedback colors
 local COLORS = {
@@ -50,8 +50,9 @@ function BuildingSystem.new(cameraController, uiManager, toastNotification)
 	self.UIManager = uiManager
 	self.ToastNotification = toastNotification
 
-	-- Building state
+	-- Building state management
 	self.IsActive = false
+	self.CurrentState = "Selection" -- Selection, Placement, Editing, Requirements
 	self.SelectedModuleId = nil
 	self.SelectedModuleData = nil
 	self.PreviewModel = nil
@@ -94,12 +95,15 @@ function BuildingSystem.new(cameraController, uiManager, toastNotification)
 
 	-- Double-click detection
 	self.LastClickTime = 0
-	self.DoubleClickThreshold = 0.3 -- 300ms window for double-click
+	self.DoubleClickThreshold = 0.4 -- Increased from 0.3 to 0.4 for more reliable detection
 
 	-- Edit mode state
 	self.EditMode = false
 	self.SelectedPlacedModule = nil -- The module being edited
 	self.EditModeConnection = nil
+
+	-- Object selection state
+	self.ObjectSelectionConnection = nil
 
 	-- Snap hint timing (to avoid spam)
 	self.LastSnapHintTime = 0
@@ -112,6 +116,9 @@ function BuildingSystem:Initialize()
 
 	-- Create snap indicator
 	self:CreateSnapIndicator()
+
+	-- Start in selection mode
+	self:EnterSelectionMode()
 
 	-- Note: Building zone will be created after receiving lane assignment from server
 	-- BUT if it doesn't happen within 2 seconds, create a default one for testing
@@ -130,6 +137,93 @@ function BuildingSystem:Initialize()
 	end)
 
 	print("BuildingSystem: Initialized successfully, waiting for lane assignment...")
+end
+
+-- STATE MANAGEMENT METHODS
+function BuildingSystem:EnterSelectionMode()
+	print("BuildingSystem: Entering Selection Mode - debug info:")
+	print("  - Current State:", self.CurrentState)
+	print("  - IsActive:", self.IsActive)
+	print("  - PreviewModel exists:", self.PreviewModel ~= nil)
+	
+	-- Clean up any active placement
+	self:CleanupPlacement()
+	
+	-- Set state
+	self.CurrentState = "Selection"
+	self.IsActive = false
+	
+	-- Enable object selection
+	self:StartObjectSelection()
+	
+	-- Notify UI to show catalog
+	print("BuildingSystem: Checking UIManager availability:")
+	print("  - UIManager exists:", self.UIManager ~= nil)
+	if self.UIManager then
+		print("  - BuildingUI exists:", self.UIManager.BuildingUI ~= nil)
+		if self.UIManager.BuildingUI then
+			print("BuildingSystem: Calling ShowCatalog on BuildingUI")
+			self.UIManager.BuildingUI:ShowCatalog()
+		else
+			warn("BuildingSystem: BuildingUI not available in UIManager!")
+		end
+	else
+		warn("BuildingSystem: UIManager not available!")
+	end
+	
+	print("BuildingSystem: Selection mode entered successfully")
+end
+
+function BuildingSystem:EnterPlacementMode(moduleId, moduleData)
+	print("BuildingSystem: Entering Placement Mode for:", moduleData.name)
+	
+	-- Stop object selection
+	self:StopObjectSelection()
+	
+	-- Set state
+	self.CurrentState = "Placement" 
+	self.SelectedModuleId = moduleId
+	self.SelectedModuleData = moduleData
+	
+	-- Start building mode
+	self:StartBuilding()
+	
+	-- Note: UI transition is handled by BuildingUI:SelectModule calling ShowPlacementMode
+	print("BuildingSystem: Placement mode activated")
+end
+
+function BuildingSystem:EnterEditingMode(placedModule)
+	print("BuildingSystem: Entering Editing Mode")
+	
+	-- Clean up any active states
+	self:CleanupPlacement()
+	self:StopObjectSelection()
+	
+	-- Set state
+	self.CurrentState = "Editing"
+	self.IsActive = false
+	
+	-- TODO: Implement editing mode logic
+end
+
+function BuildingSystem:CleanupPlacement()
+	-- Clean up preview model
+	if self.PreviewModel then
+		self.PreviewModel:Destroy()
+		self.PreviewModel = nil
+	end
+	
+	-- Stop building mode
+	if self.IsActive then
+		self:StopBuilding()
+	end
+	
+	-- Reset placement state
+	self.PlacementLocked = false
+	self.LockedPosition = nil
+	self.LockedRotation = 0
+	self.CurrentRotation = 0
+	self.LastClickTime = 0
 end
 
 function BuildingSystem:SetLaneData(laneId, position, size, spawnPosition)
@@ -454,25 +548,11 @@ end
 function BuildingSystem:SelectModule(moduleId, moduleData)
 	print("BuildingSystem: Module selected: " .. moduleData.name)
 
-	-- Clean up any existing building state
-	if self.IsActive then
-		self:StopBuilding()
-	end
-
-	-- Reset rotation and lock state
-	self.CurrentRotation = 0
-	self.PlacementLocked = false
-	self.LockedPosition = nil
-	self.LockedRotation = 0
-
-	self.SelectedModuleId = moduleId
-	self.SelectedModuleData = moduleData
+	-- Enter placement mode with this module
+	self:EnterPlacementMode(moduleId, moduleData)
 
 	-- Create preview model
 	self:CreatePreviewModel(moduleData)
-
-	-- Start building mode
-	self:StartBuilding()
 end
 
 function BuildingSystem:CreatePreviewModel(moduleData)
@@ -594,6 +674,9 @@ function BuildingSystem:StartBuilding()
 		return
 	end
 
+	-- Stop object selection when entering building mode
+	self:StopObjectSelection()
+
 	-- Check if lane is assigned
 	if not self.LaneAssigned then
 		warn("BuildingSystem: Cannot start building - lane not assigned yet")
@@ -652,6 +735,12 @@ function BuildingSystem:StartBuilding()
 			self:RotatePreview()
 		end
 
+		-- Escape key - Return to selection mode
+		if input.KeyCode == Enum.KeyCode.Escape then
+			print("BuildingSystem: Escape pressed - returning to selection mode")
+			self:EnterSelectionMode()
+		end
+
 		-- Ctrl+Z - Undo last placement
 		if input.KeyCode == Enum.KeyCode.Z and UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
 			self:UndoLastPlacement()
@@ -661,6 +750,11 @@ function BuildingSystem:StartBuilding()
 	-- Set up mouse click handling
 	self.ClickConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then
+			return
+		end
+		
+		-- Only handle clicks when in placement mode
+		if self.CurrentState ~= "Placement" then
 			return
 		end
 
@@ -682,10 +776,19 @@ function BuildingSystem:StartBuilding()
 			self.LastClickTime = currentTime
 		end
 
-		-- Right click: Cancel placement and return to catalog
+		-- Right click: Smart cancel behavior
 		if input.UserInputType == Enum.UserInputType.MouseButton2 then
-			print("BuildingSystem: Right-click - canceling placement and returning to catalog")
-			self:CancelPlacement()
+			print("BuildingSystem: Right-click detected! PlacementLocked:", self.PlacementLocked)
+			
+			if self.PlacementLocked then
+				-- If locked, just unlock and return to normal placement mode
+				print("BuildingSystem: Right-click - unlocking placement")
+				self:UnlockPlacement()
+			else
+				-- If not locked, return to selection mode
+				print("BuildingSystem: Right-click - returning to selection mode")
+				self:EnterSelectionMode()
+			end
 		end
 	end)
 
@@ -814,12 +917,15 @@ function BuildingSystem:UpdatePreview()
 			CFrame.new(nearestSnap.position) * CFrame.Angles(0, math.rad(self.CurrentRotation), 0)
 		)
 
-		-- Show snap indicator
+		-- Show snap indicator with improved visibility
 		self.SnapIndicator.Position = nearestSnap.portPosition
-		self.SnapIndicator.Transparency = 0.3
+		self.SnapIndicator.Transparency = 0.1 -- More visible
+		self.SnapIndicator.Size = Vector3.new(3, 3, 3) -- Larger for better visibility
 		local highlight = self.SnapIndicator:FindFirstChildOfClass("Highlight")
 		if highlight then
 			highlight.Enabled = true
+			highlight.FillTransparency = 0.3
+			highlight.OutlineTransparency = 0
 		end
 
 		-- Check for collisions
@@ -954,82 +1060,18 @@ function BuildingSystem:CalculateSnapPosition(targetPort, targetPart, previewPor
 	-- Transform target port direction to world space
 	local targetPortDirWorld = targetPart.CFrame:VectorToWorldSpace(targetPortDirLocal)
 
-	-- ULTRA-STRICT PORT VALIDATION: Only allow perfectly straight-through connections
-	-- No L-connections, no side-to-end connections, ONLY straight-through or T-junctions
-
-	-- Step 1: Determine which axis each port is PRIMARILY aligned with
-	-- A port must be strongly aligned with ONE axis (> 0.9 on that axis)
-	local function getPrimaryAxis(dir)
-		local absX, absY, absZ = math.abs(dir.X), math.abs(dir.Y), math.abs(dir.Z)
-
-		-- Port must be strongly aligned with one axis (> 0.9 threshold)
-		if absX > 0.9 and absX > absY and absX > absZ then
-			return "X", dir.X
-		elseif absY > 0.9 and absY > absX and absY > absZ then
-			return "Y", dir.Y
-		elseif absZ > 0.9 and absZ > absX and absZ > absY then
-			return "Z", dir.Z
-		else
-			-- Port not aligned with any primary axis - reject
-			return nil, 0
-		end
-	end
-
-	local targetAxis, targetAxisValue = getPrimaryAxis(targetPortDirWorld)
-	local previewAxis, previewAxisValue = getPrimaryAxis(previewPortDirRotated)
-
-	-- Both ports MUST be strongly axis-aligned
-	if not targetAxis or not previewAxis then
-		return nil
-	end
-
-	-- Step 2: SAME AXIS CHECK - Both ports must be on the same axis
-	if targetAxis ~= previewAxis then
-		-- Different axes = L-connection or perpendicular = INVALID
-		-- Example: horizontal end (Z-axis) trying to connect to vertical side (X-axis)
-		return nil
-	end
-
-	-- Step 3: OPPOSITE DIRECTION CHECK - Ports must face each other
-	-- For same-axis connections, the direction values must have opposite signs
-	if sign(targetAxisValue) == sign(previewAxisValue) then
-		-- Same direction on same axis = both pointing same way = INVALID
-		return nil
-	end
-
-	-- Step 4: Final dot product check for extra validation
-	-- Dot product should be very close to -1.0 (exactly opposite)
+	-- IMPROVED PORT VALIDATION: More lenient but still logical
+	-- Allow connections if ports are roughly facing each other (dot product < 0)
 	local dotProduct = targetPortDirWorld:Dot(previewPortDirRotated)
-	if dotProduct > -0.95 then
-		-- Not opposite enough - reject
+	
+	-- If ports are facing the same direction (dot > 0.1), reject
+	if dotProduct > 0.1 then
 		return nil
 	end
 
-	-- Step 5: CRITICAL - Verify port directions stay aligned after rotation
-	-- This prevents rotated modules from incorrectly connecting
-	-- We need to apply rotation to the preview port's local position to get its "effective" axis
-	local previewPortLocalRotated = rotationCFrame:VectorToWorldSpace(previewPortLocal)
-
-	-- Determine which axis each port is on (using rotated preview position)
-	local function getDominantLocalAxis(localPos)
-		local absX, absY, absZ = math.abs(localPos.X), math.abs(localPos.Y), math.abs(localPos.Z)
-		if absX > absY and absX > absZ then
-			return "X"
-		elseif absY > absX and absY > absZ then
-			return "Y"
-		else
-			return "Z"
-		end
-	end
-
-	local targetLocalAxis = getDominantLocalAxis(targetPortLocal)
-	local previewLocalAxisRotated = getDominantLocalAxis(previewPortLocalRotated)
-
-	-- CRITICAL CHECK: The effective axes must match for valid connections
-	-- This ensures a "front port" only connects to another "front/back port", not a "side port"
-	-- Even after rotation is applied
-	if targetLocalAxis ~= previewLocalAxisRotated then
-		-- Mismatched axes = invalid connection (e.g., horizontal end to vertical side)
+	-- Additional check: ensure ports are reasonably aligned (not perpendicular)
+	if math.abs(dotProduct) < 0.5 then
+		-- Ports are too perpendicular, likely an awkward connection
 		return nil
 	end
 
@@ -1037,26 +1079,22 @@ function BuildingSystem:CalculateSnapPosition(targetPort, targetPart, previewPor
 	-- Get target port position in world space
 	local targetPortWorldPos = targetPort.WorldPosition
 
-	-- NO GAP - ports should be exactly aligned for perfect connections
-	-- The module edges should touch perfectly with no overlap
-	local connectionGap = 0.0
+	-- Small gap to prevent Z-fighting and make connections clear
+	local connectionGap = 0.1
 
 	-- Calculate where the preview port should be in world space
-	-- It should be at the EXACT same position as target port for seamless connection
 	local previewPortTargetWorldPos = targetPortWorldPos + (targetPortDirWorld * connectionGap)
 
 	-- Get preview port offset from module center (after applying rotation)
 	local previewPortOffsetRotated = rotationCFrame:VectorToWorldSpace(previewPortLocal)
 
 	-- Calculate preview module center position
-	-- Preview Center + Preview Port Offset = Preview Port Target Position
-	-- Therefore: Preview Center = Preview Port Target Position - Preview Port Offset
 	local previewCenter = previewPortTargetWorldPos - previewPortOffsetRotated
 
-	-- Snap to grid for perfect alignment
+	-- Snap to grid for better alignment
 	local snappedCenter = self:SnapToGrid(previewCenter)
 
-	-- Force correct Y level (keep grid-snapped Y for perfect vertical alignment)
+	-- Use the provided Y level for consistency
 	snappedCenter = Vector3.new(snappedCenter.X, correctY, snappedCenter.Z)
 
 	return snappedCenter
@@ -1187,7 +1225,7 @@ function BuildingSystem:GetPortDirection(portAttachment)
 end
 
 function BuildingSystem:SnapToGrid(position)
-	-- Perfect grid snapping - snaps to exact grid positions aligned with lane
+	-- Improved grid snapping with better accuracy and consistency
 	local gridSize = BUILDING_ZONE.GridSize
 
 	-- Get lane position to use as reference point for snapping
@@ -1198,10 +1236,15 @@ function BuildingSystem:SnapToGrid(position)
 	local offsetY = position.Y - lanePos.Y
 	local offsetZ = position.Z - lanePos.Z
 
-	-- Snap offsets to grid
-	local snappedOffsetX = math.floor((offsetX / gridSize) + 0.5) * gridSize
-	local snappedOffsetY = math.floor((offsetY / gridSize) + 0.5) * gridSize
-	local snappedOffsetZ = math.floor((offsetZ / gridSize) + 0.5) * gridSize
+	-- Improved snapping with better rounding
+	-- Use math.round instead of floor+0.5 for more predictable results
+	local function snapValue(value, size)
+		return math.round(value / size) * size
+	end
+
+	local snappedOffsetX = snapValue(offsetX, gridSize)
+	local snappedOffsetY = snapValue(offsetY, gridSize)
+	local snappedOffsetZ = snapValue(offsetZ, gridSize)
 
 	-- Add back to lane position
 	local snappedX = lanePos.X + snappedOffsetX
@@ -1327,8 +1370,11 @@ function BuildingSystem:LockPlacement()
 
 	-- Toggle lock state
 	if self.PlacementLocked then
-		-- Already locked, do nothing (use double-click to place or right-click to unlock)
-		print("BuildingSystem: Position already locked - double-click to place or right-click to unlock")
+		-- Already locked, remind user how to place
+		print("BuildingSystem: Position already locked - double-click to place or right-click to unlock.")
+		if self.ToastNotification then
+			self.ToastNotification:Info("Double-click to place or right-click to unlock")
+		end
 		return
 	end
 
@@ -1338,6 +1384,9 @@ function BuildingSystem:LockPlacement()
 	self.LockedRotation = self.CurrentRotation
 
 	print("BuildingSystem: Position locked! Rotate with R, double-click to place, right-click to unlock.")
+	if self.ToastNotification then
+		self.ToastNotification:Info("Position locked! Double-click to place module")
+	end
 end
 
 function BuildingSystem:UnlockPlacement()
@@ -1364,9 +1413,20 @@ function BuildingSystem:PlaceModule()
 		self.LockedPosition = nil
 		self.LastClickTime = 0
 
-		-- Keep building mode active so user can place another module
-		-- The preview will be recreated by the UI if user selects same module
-		print("BuildingSystem: Module placed! Select another module or adjust position.")
+		-- Clean up current preview model
+		if self.PreviewModel then
+			self.PreviewModel:Destroy()
+			self.PreviewModel = nil
+		end
+
+		-- Stay in placement mode - create new preview of same module for continuous placing
+		if self.SelectedModuleData then
+			self:CreatePreviewModel(self.SelectedModuleData)
+			print("BuildingSystem: Module placed! Ready to place another", self.SelectedModuleData.name)
+		else
+			-- Fallback: return to selection mode if no module data
+			self:EnterSelectionMode()
+		end
 	end
 
 	return success
@@ -1464,15 +1524,10 @@ function BuildingSystem:CancelPlacement()
 		self.PreviewModel = nil
 	end
 
-	-- Reset lock state
-	self.PlacementLocked = false
-	self.LockedPosition = nil
-	self.LockedRotation = 0
+	-- Return to selection mode
+	self:EnterSelectionMode()
 
-	-- Stop building mode
-	self:StopBuilding()
-
-	print("BuildingSystem: Placement cancelled")
+	print("BuildingSystem: Placement cancelled, returned to selection mode")
 end
 
 function BuildingSystem:UndoLastPlacement()
@@ -1565,6 +1620,135 @@ function BuildingSystem:ExitEditMode()
 	print("BuildingSystem: Exited edit mode")
 end
 
+-- Object Selection and Management
+function BuildingSystem:StartObjectSelection()
+	-- Start listening for clicks on placed objects when not in building mode
+	if self.ObjectSelectionConnection then
+		return
+	end
+
+	self.ObjectSelectionConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed then
+			return -- Don't handle if GUI processed 
+		end
+
+		if self.IsActive then
+			return -- Don't handle if building mode is active
+		end
+
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			self:HandleObjectClick()
+		end
+	end)
+
+	print("BuildingSystem: Object selection started")
+end
+
+function BuildingSystem:StopObjectSelection()
+	if self.ObjectSelectionConnection then
+		self.ObjectSelectionConnection:Disconnect()
+		self.ObjectSelectionConnection = nil
+	end
+
+	-- Hide any active hover UI
+	if self.UIManager and self.UIManager.BuildingUI then
+		self.UIManager.BuildingUI:HideObjectHoverUI()
+	end
+
+	print("BuildingSystem: Object selection stopped")
+end
+
+function BuildingSystem:HandleObjectClick()
+	-- Get the mouse position
+	local mouse = LocalPlayer:GetMouse()
+	local mousePosition = Vector2.new(mouse.X, mouse.Y)
+
+	-- Only process if there are placed modules to click on
+	if #self.PlacedModules == 0 then
+		return
+	end
+
+	-- Raycast from camera through mouse position
+	local camera = workspace.CurrentCamera
+	local unitRay = camera:ScreenPointToRay(mouse.X, mouse.Y)
+	
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+	raycastParams.FilterDescendantsInstances = {camera}
+
+	local raycastResult = workspace:Raycast(unitRay.Origin, unitRay.Direction * 1000, raycastParams)
+	
+	if raycastResult then
+		local hitPart = raycastResult.Instance
+
+		-- Check if this is a placed module
+		local placedModule = self:FindPlacedModuleByPart(hitPart)
+		if placedModule then
+			print("BuildingSystem: Clicked on placed module:", placedModule.Name)
+			
+			-- Show hover UI
+			if self.UIManager and self.UIManager.BuildingUI then
+				-- First test with a simple UI to make sure it works
+				self.UIManager.BuildingUI:TestHoverUI()
+				-- Then show the actual hover UI
+				self.UIManager.BuildingUI:ShowObjectHoverUI(placedModule, mousePosition)
+			end
+		else
+			-- Hide hover UI if clicking on empty space
+			if self.UIManager and self.UIManager.BuildingUI then
+				self.UIManager.BuildingUI:HideObjectHoverUI()
+			end
+		end
+	else
+		-- Hide hover UI if clicking on empty space
+		if self.UIManager and self.UIManager.BuildingUI then
+			self.UIManager.BuildingUI:HideObjectHoverUI()
+		end
+	end
+end
+
+function BuildingSystem:FindPlacedModuleByPart(part)
+	-- Find which placed module contains this part
+	for i, placedModuleData in ipairs(self.PlacedModules) do
+		local model = placedModuleData.Model
+		
+		if model and model:IsDescendantOf(workspace) then
+			for _, descendant in ipairs(model:GetDescendants()) do
+				if descendant == part then
+					return model  -- Return the Model, not the data table
+				end
+			end
+		end
+	end
+	
+	return nil
+end
+
+function BuildingSystem:RemovePlacedModule(moduleToRemove)
+	-- Remove a placed module from the world and tracking
+	for i, placedModuleData in ipairs(self.PlacedModules) do
+		if placedModuleData.Model == moduleToRemove then
+			-- Remove from tracking array
+			table.remove(self.PlacedModules, i)
+			
+			-- Destroy the model
+			if moduleToRemove.Parent then
+				moduleToRemove:Destroy()
+			end
+			
+			print("BuildingSystem: Removed placed module:", moduleToRemove.Name)
+			
+			-- Update mission data if needed
+			-- Future: Could add removal tracking here if needed
+			
+			return true
+		end
+	end
+	
+	warn("BuildingSystem: Could not find module to remove:", moduleToRemove.Name)
+	return false
+end
+
 function BuildingSystem:StopBuilding()
 	if not self.IsActive then
 		return
@@ -1605,6 +1789,9 @@ function BuildingSystem:StopBuilding()
 	self.PlacementLocked = false
 	self.LockedPosition = nil
 	self.LockedRotation = 0
+
+	-- Start object selection when exiting building mode
+	self:StartObjectSelection()
 
 	print("BuildingSystem: Building mode stopped")
 end

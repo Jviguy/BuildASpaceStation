@@ -98,6 +98,9 @@ local missionSetupUI = MissionSetupUI.new(uiManager, missionDataManager)
 local buildingUI = BuildingUI.new(uiManager, missionDataManager, buildingSystem)
 local playUI = PlayUI.new(uiManager, missionDataManager)
 
+-- Store direct reference to BuildingUI in UIManager for easy access
+uiManager.BuildingUI = buildingUI
+
 -- Initialize camera controller with game state
 cameraController:Initialize(gameState)
 

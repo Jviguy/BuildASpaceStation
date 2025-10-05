@@ -1,0 +1,157 @@
+[
+  {
+    "id": "power_solar_basic",
+    "name": "Solar Panel Array",
+    "category": "power",
+    "description": "Basic photovoltaic array for primary power generation.",
+    "icon": "☀️",
+    "model": "SolarArray",
+    "dimensions": {
+      "width": 12,
+      "height": 1,
+      "depth": 8,
+      "volume": 96
+    },
+    "mass": {
+      "dry": 1200,
+      "max": 1200
+    },
+    "power": {
+      "consumption": 0,
+      "generation": 800
+    },
+    "crew": {
+      "capacity": 0,
+      "comfort": 0
+    },
+    "life_support": {
+      "air_recycling": 0,
+      "water_recycling": 0
+    },
+    "cost": 6000,
+    "unlock_requirements": [],
+    "special_properties": {
+      "efficiency_degradation": 0.02,
+      "sun_tracking": true,
+      "maintenance_interval": 180
+    },
+    "ports": [
+      {
+        "name": "power_out",
+        "position": [0, 0, -4],
+        "direction": [0, 0, -1],
+        "type": "power"
+      }
+    ]
+  },
+  {
+    "id": "power_reactor_small",
+    "name": "Compact Nuclear Reactor",
+    "category": "power",
+    "description": "Small modular reactor for reliable baseload power.",
+    "icon": "⚛️",
+    "model": "ReactorSmall",
+    "dimensions": {
+      "width": 4,
+      "height": 6,
+      "depth": 4,
+      "volume": 96
+    },
+    "mass": {
+      "dry": 8500,
+      "max": 9000
+    },
+    "power": {
+      "consumption": 50,
+      "generation": 1500
+    },
+    "crew": {
+      "capacity": 0,
+      "comfort": 0
+    },
+    "life_support": {
+      "air_recycling": 0,
+      "water_recycling": 0
+    },
+    "cost": 25000,
+    "unlock_requirements": ["power_solar_basic"],
+    "special_properties": {
+      "fuel_consumption": 0.1,
+      "heat_generation": 500,
+      "radiation_shielding": 0.95,
+      "maintenance_interval": 365
+    },
+    "ports": [
+      {
+        "name": "power_out",
+        "position": [0, 0, 2],
+        "direction": [0, 0, 1],
+        "type": "power"
+      },
+      {
+        "name": "coolant_in",
+        "position": [2, 0, 0],
+        "direction": [1, 0, 0],
+        "type": "coolant"
+      },
+      {
+        "name": "coolant_out",
+        "position": [-2, 0, 0],
+        "direction": [-1, 0, 0],
+        "type": "coolant"
+      }
+    ]
+  },
+  {
+    "id": "power_battery_bank",
+    "name": "Energy Storage Bank",
+    "category": "power",
+    "description": "High-capacity battery system for power storage and distribution.",
+    "icon": "🔋",
+    "model": "BatteryBank",
+    "dimensions": {
+      "width": 6,
+      "height": 3,
+      "depth": 4,
+      "volume": 72
+    },
+    "mass": {
+      "dry": 4200,
+      "max": 4200
+    },
+    "power": {
+      "consumption": 0,
+      "generation": 0,
+      "storage": 5000
+    },
+    "crew": {
+      "capacity": 0,
+      "comfort": 0
+    },
+    "life_support": {
+      "air_recycling": 0,
+      "water_recycling": 0
+    },
+    "cost": 8000,
+    "unlock_requirements": [],
+    "special_properties": {
+      "charge_efficiency": 0.92,
+      "discharge_efficiency": 0.95,
+      "self_discharge": 0.001
+    },
+    "ports": [
+      {
+        "name": "power_in",
+        "position": [0, 0, 2],
+        "direction": [0, 0, 1],
+        "type": "power"
+      },
+      {
+        "name": "power_out",
+        "position": [0, 0, -2],
+        "direction": [0, 0, -1],
+        "type": "power"
+      }
+    ]
+  }
+]
