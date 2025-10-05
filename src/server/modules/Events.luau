@@ -152,6 +152,7 @@ local Queue: any = {
 }
 
 Queue.Reliable[0] = table.create(256)
+Queue.Reliable[1] = table.create(256)
 local function Building_ReadEVENT_clientPlacedBlock(): (string)
 	-- Read BLOCK: 2 bytes
 	local BLOCK_START = Read(2)
@@ -160,12 +161,42 @@ local function Building_ReadEVENT_clientPlacedBlock(): (string)
 	return Value
 end
 
+local function Building_ReadEVENT_requestLaneAssignment(): ({ requestId: number })
+	-- Read BLOCK: 1 bytes
+	local BLOCK_START = Read(1)
+	local Value = {} :: any
+	Value.requestId = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	return Value
+end
+
+local function Building_WriteEVENT_assignLane(Value: { laneId: number, positionX: number, positionY: number, positionZ: number, sizeX: number, sizeY: number, sizeZ: number }): ()
+	-- Allocate BLOCK: 50 bytes
+	local BLOCK_START = Allocate(50)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 2)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.laneId)
+	buffer.writef64(SendBuffer, BLOCK_START + 2, Value.positionX)
+	buffer.writef64(SendBuffer, BLOCK_START + 10, Value.positionY)
+	buffer.writef64(SendBuffer, BLOCK_START + 18, Value.positionZ)
+	buffer.writef64(SendBuffer, BLOCK_START + 26, Value.sizeX)
+	buffer.writef64(SendBuffer, BLOCK_START + 34, Value.sizeY)
+	buffer.writef64(SendBuffer, BLOCK_START + 42, Value.sizeZ)
+end
+
 if not RunService:IsRunning() then
 	local NOOP = function() end
 	local Returns = table.freeze({
 	Building = {
 		clientPlacedBlock = {
 			On = NOOP
+		},
+		requestLaneAssignment = {
+			On = NOOP
+		},
+		assignLane = {
+			Fire = NOOP,
+			FireAll = NOOP,
+			FireList = NOOP,
+			FireExcept = NOOP
 		},
 	},
 	})
@@ -235,6 +266,16 @@ Reliable.OnServerEvent:Connect(function(Player: Player, Buffer: buffer, Instance
 				end
 				table.insert(Queue.Reliable[0], {Player, Value} :: {any})
 			end
+		elseif Index == 1 then
+			local Value: { requestId: number } = Building_ReadEVENT_requestLaneAssignment()
+			if Events.Reliable[1] ~= nil then
+				task.spawn(Events.Reliable[1], Player, Value)
+			else
+				if #Queue.Reliable[1] > 256 then
+					warn("[Blink]: Event queue of \"requestLaneAssignment\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[1], {Player, Value} :: {any})
+			end
 		end
 	end
 end)
@@ -269,6 +310,66 @@ local Returns = table.freeze({
 					end
 				end
 			end
+		},
+		requestLaneAssignment = {
+			On = function(Listener: (Player: Player, Value: { requestId: number }) -> ()): () -> ()
+				Events.Reliable[1] = Listener
+				for Index, Arguments in Queue.Reliable[1] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[1] = {}
+				return function (): ()
+					if Events.Reliable[1] == Listener then
+						Events.Reliable[1] = nil
+					end
+				end
+			end
+		},
+		assignLane = {
+			Fire = function(Player: Player, Value: { laneId: number, positionX: number, positionY: number, positionZ: number, sizeX: number, sizeY: number, sizeZ: number }): ()
+				Load(PlayersMap[Player])
+				Building_WriteEVENT_assignLane(Value)
+				PlayersMap[Player] = Save()
+			end,
+			FireAll = function(Value: { laneId: number, positionX: number, positionY: number, positionZ: number, sizeX: number, sizeY: number, sizeZ: number }): ()
+				Load()
+				Building_WriteEVENT_assignLane(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireList = function(List: {Player}, Value: { laneId: number, positionX: number, positionY: number, positionZ: number, sizeX: number, sizeY: number, sizeZ: number }): ()
+				Load()
+				Building_WriteEVENT_assignLane(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in List do
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
+			FireExcept = function(Except: Player, Value: { laneId: number, positionX: number, positionY: number, positionZ: number, sizeX: number, sizeY: number, sizeZ: number }): ()
+				Load()
+				Building_WriteEVENT_assignLane(Value)
+				local Buffer, Size, Instances = SendBuffer, SendCursor, SendInstances
+				for _, Player in Players:GetPlayers() do
+					if Player == Except then
+						continue
+					end
+					Load(PlayersMap[Player])
+					local Position = Allocate(Size)
+					buffer.copy(SendBuffer, Position, Buffer, 0, Size)
+					table.move(Instances, 1, #Instances, #SendInstances + 1, SendInstances)
+					PlayersMap[Player] = Save()
+				end
+			end,
 		},
 	},
 })

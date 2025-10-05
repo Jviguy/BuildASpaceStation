@@ -150,6 +150,7 @@ local Queue: any = {
     Unreliable = table.create(256)
 }
 
+Queue.Reliable[2] = table.create(256)
 local function Building_WriteEVENT_clientPlacedBlock(Value: string): ()
 	-- Allocate BLOCK: 3 bytes
 	local BLOCK_START = Allocate(3)
@@ -160,12 +161,39 @@ local function Building_WriteEVENT_clientPlacedBlock(Value: string): ()
 	buffer.writestring(SendBuffer, SendOffset, Value, Length)
 end
 
+local function Building_WriteEVENT_requestLaneAssignment(Value: { requestId: number }): ()
+	-- Allocate BLOCK: 2 bytes
+	local BLOCK_START = Allocate(2)
+	buffer.writeu8(SendBuffer, BLOCK_START + 0, 1)
+	buffer.writeu8(SendBuffer, BLOCK_START + 1, Value.requestId)
+end
+
+local function Building_ReadEVENT_assignLane(): ({ laneId: number, positionX: number, positionY: number, positionZ: number, sizeX: number, sizeY: number, sizeZ: number })
+	-- Read BLOCK: 49 bytes
+	local BLOCK_START = Read(49)
+	local Value = {} :: any
+	Value.laneId = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+	Value.positionX = buffer.readf64(RecieveBuffer, BLOCK_START + 1)
+	Value.positionY = buffer.readf64(RecieveBuffer, BLOCK_START + 9)
+	Value.positionZ = buffer.readf64(RecieveBuffer, BLOCK_START + 17)
+	Value.sizeX = buffer.readf64(RecieveBuffer, BLOCK_START + 25)
+	Value.sizeY = buffer.readf64(RecieveBuffer, BLOCK_START + 33)
+	Value.sizeZ = buffer.readf64(RecieveBuffer, BLOCK_START + 41)
+	return Value
+end
+
 if not RunService:IsRunning() then
 	local NOOP = function() end
 	local Returns = table.freeze({
 	Building = {
 		clientPlacedBlock = {
 			Fire = NOOP
+		},
+		requestLaneAssignment = {
+			Fire = NOOP
+		},
+		assignLane = {
+			On = NOOP
 		},
 	},
 	})
@@ -205,6 +233,17 @@ Reliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
 		-- Read BLOCK: 1 bytes
 		local BLOCK_START = Read(1)
 		local Index = buffer.readu8(RecieveBuffer, BLOCK_START + 0)
+		if Index == 2 then
+			local Value: { laneId: number, positionX: number, positionY: number, positionZ: number, sizeX: number, sizeY: number, sizeZ: number } = Building_ReadEVENT_assignLane()
+			if Events.Reliable[2] ~= nil then
+				task.spawn(Events.Reliable[2], Value)
+			else
+				if #Queue.Reliable[2] > 256 then
+					warn("[Blink]: Event queue of \"assignLane\" exceeded 256, did you forget to implement a listener?")
+				end
+				table.insert(Queue.Reliable[2], {Value} :: {any})
+			end
+		end
 	end
 end)
 Unreliable.OnClientEvent:Connect(function(Buffer: buffer, Instances: {Instance})
@@ -228,6 +267,25 @@ local Returns = table.freeze({
 		clientPlacedBlock = {
 			Fire = function(Value: string): ()
 				Building_WriteEVENT_clientPlacedBlock(Value)
+			end
+		},
+		requestLaneAssignment = {
+			Fire = function(Value: { requestId: number }): ()
+				Building_WriteEVENT_requestLaneAssignment(Value)
+			end
+		},
+		assignLane = {
+			On = function(Listener: (Value: { laneId: number, positionX: number, positionY: number, positionZ: number, sizeX: number, sizeY: number, sizeZ: number }) -> ()): () -> ()
+				Events.Reliable[2] = Listener
+				for Index, Arguments in Queue.Reliable[2] do
+					task.spawn(Listener, table.unpack(Arguments))
+				end
+				Queue.Reliable[2] = {}
+				return function (): ()
+					if Events.Reliable[2] == Listener then
+						Events.Reliable[2] = nil
+					end
+				end
 			end
 		},
 	},

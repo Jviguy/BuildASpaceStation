@@ -4,3 +4,27 @@ event clientPlacedBlock {
     call: SingleAsync,
     data: string,
 }
+
+event requestLaneAssignment {
+    from: Client,
+    type: Reliable,
+    call: SingleAsync,
+    data: struct {
+        requestId: u8
+    }
+}
+
+event assignLane {
+    from: Server,
+    type: Reliable,
+    call: SingleAsync,
+    data: struct {
+        laneId: u8,
+        positionX: f64,
+        positionY: f64,
+        positionZ: f64,
+        sizeX: f64,
+        sizeY: f64,
+        sizeZ: f64
+    }
+}
